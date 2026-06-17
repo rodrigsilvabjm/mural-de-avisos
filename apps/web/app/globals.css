@@ -1,0 +1,304 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+  --bg: #f5f7fb;
+  --panel: #ffffff;
+  --ink: #111827;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+  margin: 0;
+  background: var(--bg);
+  color: var(--ink);
+}
+
+body {
+  font-family:
+    Inter, Roboto, Arial, Helvetica, sans-serif;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.player-safe-area {
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+  background: #050816;
+}
+
+.notice-body img,
+.notice-body video {
+  display: block;
+  width: min(100%, var(--notice-media-width, 100%));
+  max-height: 64vh;
+  object-fit: contain;
+  border-radius: 18px;
+  margin: 1rem auto;
+  background:
+    radial-gradient(circle at center, rgba(255, 255, 255, 0.12), transparent 45%),
+    rgba(0, 0, 0, 0.25);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.32);
+}
+
+.notice-body::after {
+  clear: both;
+  content: "";
+  display: block;
+}
+
+.notice-body video::-webkit-media-controls {
+  display: none !important;
+}
+
+.ticker-track {
+  display: inline-block;
+  min-width: 200%;
+  animation: tickerScroll 22s linear infinite;
+}
+
+@keyframes tickerScroll {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(54px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideOut {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(-54px);
+  }
+}
+
+@keyframes slideLeftIn {
+  from {
+    opacity: 0;
+    transform: translateX(-54px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes slideLeftOut {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(54px);
+  }
+}
+
+@keyframes slideUpIn {
+  from {
+    opacity: 0;
+    transform: translateY(54px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideUpOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-54px);
+  }
+}
+
+@keyframes slideDownIn {
+  from {
+    opacity: 0;
+    transform: translateY(-54px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideDownOut {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(54px);
+  }
+}
+
+@keyframes zoomIn {
+  from {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes zoomOut {
+  from {
+    opacity: 1;
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+}
+
+@keyframes flipIn {
+  from {
+    opacity: 0;
+    transform: rotateX(18deg) translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: rotateX(0) translateY(0);
+  }
+}
+
+@keyframes flipOut {
+  from {
+    opacity: 1;
+    transform: rotateX(0) translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: rotateX(-18deg) translateY(-18px);
+  }
+}
+
+@keyframes bounceIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.86) translateY(28px);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1.04) translateY(-8px);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+@keyframes bounceOut {
+  0% {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.88) translateY(30px);
+  }
+}
+
+@keyframes rotateIn {
+  from {
+    opacity: 0;
+    transform: rotate(-8deg) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: rotate(0) scale(1);
+  }
+}
+
+@keyframes rotateOut {
+  from {
+    opacity: 1;
+    transform: rotate(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: rotate(8deg) scale(0.92);
+  }
+}
+
+@keyframes blurIn {
+  from {
+    opacity: 0;
+    filter: blur(14px);
+    transform: scale(1.03);
+  }
+  to {
+    opacity: 1;
+    filter: blur(0);
+    transform: scale(1);
+  }
+}
+
+@keyframes blurOut {
+  from {
+    opacity: 1;
+    filter: blur(0);
+    transform: scale(1);
+  }
+  to {
+    opacity: 0;
+    filter: blur(14px);
+    transform: scale(1.03);
+  }
+}
