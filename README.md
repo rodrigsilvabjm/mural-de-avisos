@@ -1,4 +1,4 @@
-# Corporate Signage SaaS
+# Mural de Avisos
 
 Plataforma SaaS para TV corporativa, mural de avisos e digital signage. A arquitetura foi preparada como monorepo com:
 
