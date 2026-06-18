@@ -35,6 +35,12 @@ export default async function HomePage() {
             >
               Abrir player TV001
             </a>
+            <a
+              className="rounded-md border border-slate-300 bg-white px-4 py-2 text-sm font-semibold hover:bg-slate-50"
+              href="/player-lite/TV001"
+            >
+              Player LG/webOS
+            </a>
             <a className="rounded-md bg-brand px-4 py-2 text-sm font-semibold text-white" href="#conteudos">
               Novo conteudo
             </a>

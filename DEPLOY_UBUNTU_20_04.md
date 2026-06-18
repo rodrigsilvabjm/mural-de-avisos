@@ -29,6 +29,7 @@ bash scripts/install-ubuntu-20.04.sh http://painel.seudominio.com:8080
 
 - Painel: `http://IP_DA_VM:8080`
 - Player: `http://IP_DA_VM:8080/player/TV001`
+- Player compativel LG/webOS: `http://IP_DA_VM:8080/player-lite/TV001`
 - API: `http://IP_DA_VM:8080/api`
 
 ## Atualizar depois

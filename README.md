@@ -44,6 +44,7 @@ URLs padrao:
 - Painel via Nginx: http://localhost:8080
 - API: http://localhost:4000/api
 - Player exemplo: http://localhost:3000/player/TV001
+- Player compativel LG/webOS: http://localhost:3000/player-lite/TV001
 - MinIO Console: http://localhost:9001
 
 ## Deploy automatico em Ubuntu 20.04
@@ -70,6 +71,17 @@ bash scripts/update.sh
 ```
 
 Mais detalhes em `DEPLOY_UBUNTU_20_04.md`.
+
+## TVs LG webOS e navegadores antigos
+
+Algumas TVs LG webOS usam navegador Chromium antigo. Se o player normal abrir
+apenas o fundo, use o modo compativel:
+
+```text
+http://IP_DA_VM:8080/player-lite/TV001
+```
+
+O sistema tambem tenta detectar LG/webOS automaticamente em `/player/TV001`.
 
 ## Proximos passos recomendados
 
