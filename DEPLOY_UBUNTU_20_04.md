@@ -32,6 +32,13 @@ bash scripts/install-ubuntu-20.04.sh http://painel.seudominio.com:8080
 - Player compativel LG/webOS: `http://IP_DA_VM:8080/player-lite/TV001`
 - API: `http://IP_DA_VM:8080/api`
 
+Se uma TV LG continuar exibindo uma versao antiga apos atualizar, use uma URL
+com parametro de versao para furar o cache do navegador:
+
+```text
+http://IP_DA_VM:8080/player-lite/TV001?v=2
+```
+
 ## Atualizar depois
 
 ```bash

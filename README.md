@@ -82,6 +82,11 @@ http://IP_DA_VM:8080/player-lite/TV001
 ```
 
 O sistema tambem tenta detectar LG/webOS automaticamente em `/player/TV001`.
+Se a TV continuar mostrando a versao antiga, force a URL com versao:
+
+```text
+http://IP_DA_VM:8080/player-lite/TV001?v=2
+```
 
 ## Proximos passos recomendados
 

@@ -19,12 +19,14 @@ fi
 
 echo "Baixando imagens e reconstruindo containers..."
 ${SUDO} docker compose pull --ignore-pull-failures || true
-${SUDO} docker compose up -d --build
+${SUDO} docker compose build --pull api web
+${SUDO} docker compose up -d --force-recreate
 
 echo "Aguardando aplicacao..."
 for _ in $(seq 1 60); do
   if curl -fsS http://localhost:8080 >/dev/null 2>&1; then
     echo "Atualizacao concluida: http://localhost:8080"
+    echo "Player LG/webOS sem cache: http://localhost:8080/player-lite/TV001?v=$(git rev-parse --short HEAD 2>/dev/null || date +%s)"
     exit 0
   fi
   sleep 2
