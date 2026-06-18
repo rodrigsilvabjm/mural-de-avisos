@@ -122,7 +122,7 @@ export function RibbonEditor({
         endsAt: String(form.get('endsAt') || ''),
         tickerText: String(form.get('tickerText') ?? ''),
         tickerPersistent: form.get('tickerPersistent') === 'on',
-        bodyHtml: editorRef.current?.innerHTML ?? '',
+        bodyHtml: normalizeNoticeHtml(editorRef.current?.innerHTML ?? ''),
       };
       const saved = notice?.id
         ? await api.updateNotice(notice.id, payload)
@@ -361,6 +361,41 @@ function ToolbarButton({
       <Icon size={17} />
     </button>
   );
+}
+
+function normalizeNoticeHtml(html: string) {
+  const template = document.createElement('template');
+  template.innerHTML = html;
+
+  const sizeMap: Record<string, string> = {
+    '1': '12px',
+    '2': '18px',
+    '3': '24px',
+    '4': '32px',
+    '5': '42px',
+    '6': '54px',
+    '7': '68px',
+  };
+
+  template.content.querySelectorAll('font').forEach((font) => {
+    const span = document.createElement('span');
+    const size = font.getAttribute('size');
+    const color = font.getAttribute('color');
+    const face = font.getAttribute('face');
+    if (size && sizeMap[size]) span.style.fontSize = sizeMap[size];
+    if (color) span.style.color = color;
+    if (face) span.style.fontFamily = face;
+    span.innerHTML = font.innerHTML;
+    font.replaceWith(span);
+  });
+
+  template.content.querySelectorAll('img,video').forEach((media) => {
+    const element = media as HTMLElement;
+    element.style.maxWidth = element.style.maxWidth || '100%';
+    element.style.objectFit = element.style.objectFit || 'contain';
+  });
+
+  return template.innerHTML;
 }
 
 function insertTable(editor: HTMLDivElement | null) {

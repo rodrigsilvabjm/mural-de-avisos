@@ -4,6 +4,7 @@ import { AppShell } from '../components/AppShell';
 import { EmergencyPanel } from '../components/EmergencyPanel';
 import { MetricCard } from '../components/MetricCard';
 import { NoticeCenter } from '../components/NoticeCenter';
+import { ScreensMonitor } from '../components/ScreensMonitor';
 import { TemplateCanvas } from '../components/TemplateCanvas';
 import { api } from '../lib/api';
 
@@ -58,43 +59,7 @@ export default async function HomePage() {
         </div>
 
         <section className="mt-6 grid gap-6">
-          <div id="telas" className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-            <h2 className="text-lg font-semibold">Monitoramento das TVs</h2>
-            <div className="mt-3 overflow-x-auto">
-              <table className="w-full min-w-[540px] text-left text-sm">
-                <thead className="text-xs uppercase text-slate-500">
-                  <tr>
-                    <th className="py-2">Codigo</th>
-                    <th>Nome</th>
-                    <th>Grupo</th>
-                    <th>Status</th>
-                    <th>Conexao</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {screens.map((screen) => (
-                    <tr key={screen.id}>
-                      <td className="py-3 font-medium">{screen.code}</td>
-                      <td>{screen.name ?? 'Aguardando aprovacao'}</td>
-                      <td>{screen.group ?? '-'}</td>
-                      <td>{screen.status}</td>
-                      <td>
-                        <span
-                          className={`rounded-full px-2 py-1 text-xs font-semibold ${
-                            screen.online
-                              ? 'bg-green-100 text-green-700'
-                              : 'bg-slate-100 text-slate-600'
-                          }`}
-                        >
-                          {screen.online ? 'online' : 'offline'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <ScreensMonitor initialScreens={screens} />
         </section>
 
         <AdminControls

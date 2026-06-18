@@ -29,6 +29,9 @@ import {
 
 const tenantId = 'default-tenant';
 const stateFile = process.env.SIGNAGE_STATE_FILE ?? '/data/signage-state.json';
+const screenOfflineAfterMs = 60 * 1000;
+const screenHideAfterMs = 5 * 60 * 1000;
+const screenCodePattern = /^[A-Z0-9_-]{2,32}$/;
 
 function now() {
   return new Date().toISOString();
@@ -97,12 +100,13 @@ export class SignageService {
 
   dashboard() {
     this.seed();
+    const screens = this.listScreens();
     return {
       totals: {
         assets: this.assets.length,
         notices: this.notices.length,
-        screens: this.screens.length,
-        onlineScreens: this.screens.filter((screen) => screen.online).length,
+        screens: screens.length,
+        onlineScreens: screens.filter((screen) => screen.online).length,
       },
       emergency: this.emergency,
       latestAudit: this.audit.slice(-8).reverse(),
@@ -192,13 +196,15 @@ export class SignageService {
   }
 
   registerScreen(dto: RegisterScreenDto, ipAddress?: string) {
-    const code = dto.code ?? `TV-${Math.floor(10000 + Math.random() * 89999)}`;
+    const code = sanitizeScreenCode(dto.code) ?? `TV-${Math.floor(10000 + Math.random() * 89999)}`;
     const existing = this.screens.find((screen) => screen.code === code);
     if (existing) {
       existing.online = true;
       existing.lastSeenAt = now();
       existing.ipAddress = ipAddress;
       existing.userAgent = dto.userAgent;
+      existing.updatedAt = now();
+      this.saveState();
       return existing;
     }
 
@@ -235,13 +241,16 @@ export class SignageService {
   }
 
   listScreens() {
-    return this.screens;
+    this.refreshScreenPresence();
+    return this.screens.filter((screen) => isValidScreenCode(screen.code));
   }
 
   markOnline(code: string, userAgent?: string) {
-    const screen = this.registerScreen({ code, userAgent });
+    const screen = this.registerScreen({ code: sanitizeScreenCode(code) ?? 'TV001', userAgent });
     screen.online = true;
     screen.lastSeenAt = now();
+    screen.updatedAt = now();
+    this.saveState();
     return screen;
   }
 
@@ -368,7 +377,7 @@ export class SignageService {
   }
 
   playerPayload(code: string) {
-    const screen = this.registerScreen({ code });
+    const screen = this.registerScreen({ code: sanitizeScreenCode(code) ?? 'TV001' });
     const date = new Date();
     const notices = this.listNotices().filter((notice) => isInWindow(notice.startsAt, notice.endsAt, date));
     const activeSchedules = this.schedules.filter((schedule) => {
@@ -521,6 +530,38 @@ export class SignageService {
     }
   }
 
+  private refreshScreenPresence() {
+    const current = Date.now();
+    let changed = false;
+
+    for (const screen of this.screens) {
+      if (!isValidScreenCode(screen.code)) {
+        screen.online = false;
+        changed = true;
+        continue;
+      }
+
+      const lastSeen = parseDate(screen.lastSeenAt);
+      if (lastSeen !== undefined && current - lastSeen > screenOfflineAfterMs && screen.online) {
+        screen.online = false;
+        screen.updatedAt = now();
+        changed = true;
+      }
+    }
+
+    for (let index = this.screens.length - 1; index >= 0; index -= 1) {
+      const screen = this.screens[index];
+      const lastSeen = parseDate(screen.lastSeenAt) ?? parseDate(screen.updatedAt) ?? parseDate(screen.createdAt) ?? 0;
+      const shouldHide = !isValidScreenCode(screen.code) || (!screen.online && current - lastSeen > screenHideAfterMs);
+      if (shouldHide) {
+        this.screens.splice(index, 1);
+        changed = true;
+      }
+    }
+
+    if (changed) this.saveState();
+  }
+
   private saveState() {
     try {
       mkdirSync(dirname(stateFile), { recursive: true });
@@ -546,5 +587,27 @@ export class SignageService {
     } catch (error) {
       console.error('Falha ao salvar estado do signage', error);
     }
+  }
+}
+
+function sanitizeScreenCode(value?: string) {
+  if (!value) return undefined;
+  const decoded = safeDecodeURIComponent(value);
+  const normalized = decoded
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9_-]/g, '');
+  return isValidScreenCode(normalized) ? normalized : undefined;
+}
+
+function isValidScreenCode(value?: string) {
+  return Boolean(value && screenCodePattern.test(value));
+}
+
+function safeDecodeURIComponent(value: string) {
+  try {
+    return decodeURIComponent(value);
+  } catch {
+    return value;
   }
 }
