@@ -8,6 +8,8 @@ type LiteSlide = {
   duration: number;
   metadata?: Record<string, unknown>;
   displayMode?: 'dark' | 'light';
+  transition?: string;
+  fitMode?: string;
 };
 
 export function LitePlayerPage({ code, payload }: { code: string; payload: PlayerPayload }) {
@@ -74,14 +76,33 @@ function buildLiteSlides(payload: PlayerPayload): LiteSlide[] {
         tickerPersistent: notice.tickerPersistent ?? false,
       },
     }));
-  const assetSlides = payload.assets.map((asset) => ({
-    id: asset.id,
-    title: asset.name,
-    type: asset.type,
-    body: asset.url,
-    duration: asset.durationSeconds || 15,
-    metadata: asset.metadata ?? {},
-  }));
+  const assetSlides = payload.assets.flatMap((asset) => {
+    const metadata = asset.metadata ?? {};
+    const convertedSlides = Array.isArray(metadata.slides) ? metadata.slides.filter(Boolean).map(String) : [];
+    if (convertedSlides.length > 0) {
+      const perSlideSeconds = Math.max(1, Number(metadata.perSlideSeconds) || 5);
+      return convertedSlides.map((slideUrl, index) => ({
+        id: `${asset.id}-${index}`,
+        title: `${asset.name} ${index + 1}`,
+        type: 'image',
+        body: slideUrl,
+        duration: perSlideSeconds,
+        metadata,
+        transition: String(metadata.slideTransition ?? 'fade'),
+        fitMode: String(metadata.fitMode ?? 'contain'),
+      }));
+    }
+    return [{
+      id: asset.id,
+      title: asset.name,
+      type: asset.type,
+      body: asset.url,
+      duration: asset.durationSeconds || 15,
+      metadata,
+      transition: String(metadata.slideTransition ?? 'fade'),
+      fitMode: String(metadata.fitMode ?? 'cover'),
+    }];
+  });
   return [...templateSlides, ...noticeSlides, ...assetSlides];
 }
 
@@ -130,19 +151,32 @@ function renderStaticSlide(slide: LiteSlide) {
 function renderAssetSlide(slide: LiteSlide) {
   const url = mediaUrl(String(slide.body ?? ''));
   const metadata = slide.metadata ?? {};
-  const slides = Array.isArray(metadata.slides) ? metadata.slides.filter(Boolean).map(String) : [];
-  if (slides.length > 0) {
-    return <img className="full-media" src={mediaUrl(slides[0])} alt={slide.title} />;
+  const fitMode = String(slide.fitMode ?? metadata.fitMode ?? 'cover') === 'contain' ? 'contain' : 'cover';
+  if (slide.type === 'image') {
+    return (
+      <div className={`media-stage fit-${fitMode}`}>
+        {fitMode === 'contain' ? <img className="media-blur" src={url} alt="" /> : null}
+        <img className={`full-media fit-${fitMode}`} src={url} alt={slide.title} />
+      </div>
+    );
   }
-  if (slide.type === 'image') return <img className="full-media" src={url} alt={slide.title} />;
-  if (slide.type === 'video') return <video className="full-media" src={url} autoPlay muted loop playsInline />;
+  if (slide.type === 'video') {
+    return (
+      <div className={`media-stage fit-${fitMode}`}>
+        {fitMode === 'contain' ? <video className="media-blur" src={url} autoPlay muted loop playsInline /> : null}
+        <video className={`full-media fit-${fitMode}`} src={url} autoPlay muted loop playsInline />
+      </div>
+    );
+  }
   if (slide.type === 'youtube') return <iframe className="full-frame" src={toYoutubeEmbed(url)} title={slide.title} allow="autoplay; fullscreen" />;
-  if (['webpage', 'external-link', 'dashboard'].includes(slide.type)) return <iframe className="full-frame" src={url} title={slide.title} />;
+  if (['webpage', 'external-link', 'dashboard'].includes(slide.type)) {
+    return <iframe className="full-frame" src={embeddableUrl(url, metadata)} title={slide.title} />;
+  }
   if (slide.type === 'rss') {
     return (
-      <article className="notice-slide">
+      <article className="rss-slide" data-rss-url={url}>
         <h1>{slide.title}</h1>
-        <p>{url}</p>
+        <p>Carregando RSS...</p>
       </article>
     );
   }
@@ -161,9 +195,13 @@ function renderTemplateItem(item: {
   const data = item.data ?? {};
   const sourceUrl = mediaUrl(String(data.sourceUrl ?? ''));
   const content = String(data.content ?? data.label ?? '');
-  if (item.kind === 'image' && sourceUrl) return <img className="template-media" src={sourceUrl} alt={content} />;
-  if (item.kind === 'video' && sourceUrl) return <video className="template-media" src={sourceUrl} autoPlay muted loop playsInline />;
-  if (item.kind === 'iframe' && sourceUrl) return <iframe className="template-media" src={sourceUrl} title={content || sourceUrl} />;
+  const fitMode = data.fitMode === 'cover' ? 'cover' : 'contain';
+  if (item.kind === 'image' && sourceUrl) return <img className={`template-media fit-${fitMode}`} src={sourceUrl} alt={content} />;
+  if (item.kind === 'video' && sourceUrl) return <video className={`template-media fit-${fitMode}`} src={sourceUrl} autoPlay muted loop playsInline />;
+  if (item.kind === 'iframe' && sourceUrl) return <iframe className="template-media" src={embeddableUrl(sourceUrl, data)} title={content || sourceUrl} />;
+  if (item.kind === 'rss') {
+    return <div className="template-rss" data-rss-url={sourceUrl || content}>Carregando RSS...</div>;
+  }
   return <div className="template-text" dangerouslySetInnerHTML={{ __html: normalizeMediaHtml(content) }} />;
 }
 
@@ -206,6 +244,19 @@ function toYoutubeEmbed(rawUrl: string) {
   }
 }
 
+function embeddableUrl(rawUrl: string, metadata: Record<string, unknown>) {
+  const authMode = String(metadata.authMode ?? '');
+  if (!authMode || authMode === 'none') return rawUrl;
+  const params = [
+    `url=${encodeURIComponent(rawUrl)}`,
+    `authMode=${encodeURIComponent(authMode)}`,
+    'proxyVersion=lite-1',
+  ];
+  if (metadata.authUsername) params.push(`username=${encodeURIComponent(String(metadata.authUsername))}`);
+  if (metadata.authPassword) params.push(`password=${encodeURIComponent(String(metadata.authPassword))}`);
+  return `/api/proxy/frame?${params.join('&')}`;
+}
+
 function liteCss() {
   return `
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#050816;color:#fff;font-family:Arial,Helvetica,sans-serif}
@@ -222,12 +273,20 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#050816;col
 .notice-slide h1{font-size:64px;line-height:1.1;margin:0 0 28px;font-weight:900}
 .notice-body{font-size:36px;line-height:1.35;max-width:1100px}
 .notice-body img,.notice-body video{max-width:100%;max-height:62vh;object-fit:contain;border-radius:16px}
-.full-media,.full-frame{position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover;border:0;background:#000}
+.media-stage{position:absolute;left:0;top:0;width:100%;height:100%;overflow:hidden;background:#000}
+.media-blur{position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover;filter:blur(26px);transform:scale(1.08);opacity:.72}
+.full-media,.full-frame{position:absolute;left:0;top:0;width:100%;height:100%;border:0;background:#000}
+.fit-cover{object-fit:cover}.fit-contain{object-fit:contain}
 .template-slide{position:absolute;left:0;top:0;width:100%;height:100%}
 .template-item{position:absolute;display:flex;align-items:center;justify-content:center;overflow:hidden;text-align:center;border-radius:14px}
-.template-media{width:100%;height:100%;object-fit:cover;border:0}.template-text{width:100%;font-size:28px;line-height:1.25}
+.template-media{width:100%;height:100%;border:0}.template-text{width:100%;font-size:28px;line-height:1.25}
+.rss-slide{position:absolute;left:10%;right:10%;top:12%;bottom:10%;overflow:hidden;background:rgba(255,255,255,.96);color:#0f172a;border-radius:22px;padding:42px;text-align:left}
+.rss-slide h1{font-size:38px;color:#b91c1c;margin:0 0 20px}.rss-slide h3{font-size:28px;margin:18px 0 6px}.rss-slide p{font-size:21px;line-height:1.25;color:#334155}
+.template-rss{width:100%;height:100%;overflow:hidden;text-align:left;background:rgba(255,255,255,.96);color:#0f172a;padding:12px}.template-rss h3{font-size:14px;margin:6px 0}.template-rss p{font-size:12px;margin:0 0 8px}
 #ticker{display:none;position:absolute;z-index:5;left:0;right:0;bottom:0;background:#dc2626;color:#fff;white-space:nowrap;overflow:hidden;padding:12px 0;font-size:30px;font-weight:900}
 #ticker span{display:inline-block;padding-left:100%;animation:ticker 22s linear infinite}@keyframes ticker{0%{transform:translateX(0)}100%{transform:translateX(-100%)}}
+.slide-in-fade{animation:fadeIn .7s ease}.slide-in-slide{animation:slideIn .7s ease}.slide-in-slide-left{animation:slideLeftIn .7s ease}.slide-in-slide-up{animation:slideUpIn .7s ease}.slide-in-slide-down{animation:slideDownIn .7s ease}.slide-in-zoom{animation:zoomIn .7s ease}.slide-in-blur{animation:blurIn .7s ease}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}@keyframes slideIn{from{opacity:0;transform:translateX(60px)}to{opacity:1;transform:translateX(0)}}@keyframes slideLeftIn{from{opacity:0;transform:translateX(-60px)}to{opacity:1;transform:translateX(0)}}@keyframes slideUpIn{from{opacity:0;transform:translateY(60px)}to{opacity:1;transform:translateY(0)}}@keyframes slideDownIn{from{opacity:0;transform:translateY(-60px)}to{opacity:1;transform:translateY(0)}}@keyframes zoomIn{from{opacity:0;transform:scale(.94)}to{opacity:1;transform:scale(1)}}@keyframes blurIn{from{opacity:0;filter:blur(12px)}to{opacity:1;filter:blur(0)}}
 `;
 }
 
@@ -244,42 +303,52 @@ function liteScript() {
   }
   function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
   function media(u){return String(u||'').replace(/^https?:\\/\\/(localhost|127\\.0\\.0\\.1)(:\\d+)?\\/media\\//i,'/media/');}
+  function enc(v){return encodeURIComponent(String(v==null?'':v));}
+  function prox(u,m){m=m||{};var a=m.authMode||'';if(!a||a==='none')return u;var q='url='+enc(u)+'&authMode='+enc(a)+'&proxyVersion=lite-1';if(m.authUsername)q+='&username='+enc(m.authUsername);if(m.authPassword)q+='&password='+enc(m.authPassword);return '/api/proxy/frame?'+q;}
+  function fit(m){return (m&&m.fitMode==='contain')?'contain':'cover';}
+  function trans(s){var t=(s&&s.transition)||(s&&s.metadata&&s.metadata.slideTransition)||'fade';return 'slide-in-'+String(t).replace(/[^a-z-]/g,'');}
   function activeNotice(n){var now=Date.now();var st=n.startsAt?new Date(n.startsAt).getTime():0;var en=n.endsAt?new Date(n.endsAt).getTime():Infinity;return (isNaN(st)||st<=now)&&(isNaN(en)||en>=now);}
   function build(p){
     var out=[],i,a,n,t;
     for(i=0;i<(p.templates||[]).length;i++){t=p.templates[i];out.push({id:t.id,title:t.name,type:'template',body:t.items||[],duration:t.durationSeconds||25,displayMode:t.displayMode||'dark'});}
     for(i=0;i<(p.notices||[]).length;i++){n=p.notices[i];if(activeNotice(n)){out.push({id:n.id,title:n.title,type:'notice',body:n.bodyHtml||'',duration:n.durationSeconds||15,metadata:{tickerText:n.tickerText||'',tickerPersistent:!!n.tickerPersistent}});}}
-    for(i=0;i<(p.assets||[]).length;i++){a=p.assets[i];out.push({id:a.id,title:a.name,type:a.type,body:a.url,duration:a.durationSeconds||15,metadata:a.metadata||{}});}
+    for(i=0;i<(p.assets||[]).length;i++){a=p.assets[i];var m=a.metadata||{},arr=m.slides||[];if(arr.length){for(var j=0;j<arr.length;j++){out.push({id:a.id+'-'+j,title:a.name+' '+(j+1),type:'image',body:arr[j],duration:m.perSlideSeconds||5,metadata:m,transition:m.slideTransition||'fade',fitMode:m.fitMode||'contain'});}}else{out.push({id:a.id,title:a.name,type:a.type,body:a.url,duration:a.durationSeconds||15,metadata:m,transition:m.slideTransition||'fade',fitMode:m.fitMode||'cover'});}}
     return out;
   }
   function renderTemplate(items){
     var html='<div class="template-slide">';
     for(var i=0;i<items.length;i++){var it=items[i],d=it.data||{},url=media(d.sourceUrl||''),content=String(d.content||d.label||''),left=(it.x/760*100),top=(it.y/430*100),w=(it.width/760*100),h=(it.height/430*100);
-      html+='<div class="template-item" style="left:'+left+'%;top:'+top+'%;width:'+w+'%;height:'+h+'%;z-index:'+(it.zIndex||1)+'">';
-      if(it.kind==='image'&&url){html+='<img class="template-media" src="'+esc(url)+'">';}
-      else if(it.kind==='video'&&url){html+='<video class="template-media" src="'+esc(url)+'" autoplay muted loop playsinline></video>';}
-      else if(it.kind==='iframe'&&url){html+='<iframe class="template-media" src="'+esc(url)+'"></iframe>';}
+      var tm=d.fitMode==='cover'?'cover':'contain';var anim=d.transition&&d.transition!=='none'?'animation:'+animName(d.transition)+' .7s ease;':'';
+      html+='<div class="template-item" style="left:'+left+'%;top:'+top+'%;width:'+w+'%;height:'+h+'%;z-index:'+(it.zIndex||1)+';'+anim+'">';
+      if(it.kind==='image'&&url){html+='<img class="template-media fit-'+tm+'" src="'+esc(url)+'">';}
+      else if(it.kind==='video'&&url){html+='<video class="template-media fit-'+tm+'" src="'+esc(url)+'" autoplay muted loop playsinline></video>';}
+      else if(it.kind==='iframe'&&url){html+='<iframe class="template-media" src="'+esc(prox(url,d))+'"></iframe>';}
+      else if(it.kind==='rss'){html+='<div class="template-rss" data-rss-url="'+esc(url||content)+'">Carregando RSS...</div>';}
       else{html+='<div class="template-text">'+content+'</div>';}
       html+='</div>';
     }
     return html+'</div>';
   }
+  function animName(t){t=String(t||'fade');var m={'fade':'fadeIn','slide':'slideIn','slide-left':'slideLeftIn','slide-up':'slideUpIn','slide-down':'slideDownIn','zoom':'zoomIn','blur':'blurIn','flip':'zoomIn','bounce':'zoomIn','rotate':'zoomIn'};return m[t]||'fadeIn';}
   function youtube(u){try{var url=new URL(u);var id=url.hostname.indexOf('youtu.be')>=0?url.pathname.split('/')[1]:url.searchParams.get('v');return id?'https://www.youtube.com/embed/'+id+'?autoplay=1&mute=1&controls=0&rel=0&loop=1&playlist='+id:u;}catch(e){return u;}}
   function render(s){
     var el=document.getElementById('slide'); if(!el)return;
     var html='',u=media(s.body||''),m=s.metadata||{},arr=m.slides||[];
     if(s.type==='template'){html=renderTemplate(s.body||[]);}
     else if(s.type==='notice'){html='<article class="notice-slide"><h1>'+esc(s.title)+'</h1><div class="notice-body">'+String(s.body||'').replace(/https?:\\/\\/(localhost|127\\.0\\.0\\.1)(:\\d+)?\\/media\\//gi,'/media/')+'</div></article>';}
-    else if(arr.length){html='<img class="full-media" src="'+esc(media(arr[0]))+'">';}
-    else if(s.type==='image'){html='<img class="full-media" src="'+esc(u)+'">';}
-    else if(s.type==='video'){html='<video class="full-media" src="'+esc(u)+'" autoplay muted loop playsinline></video>';}
+    else if(s.type==='image'){var fm=fit(s);html='<div class="media-stage fit-'+fm+'">'+(fm==='contain'?'<img class="media-blur" src="'+esc(u)+'">':'')+'<img class="full-media fit-'+fm+'" src="'+esc(u)+'"></div>';}
+    else if(s.type==='video'){var fmv=fit(s);html='<div class="media-stage fit-'+fmv+'">'+(fmv==='contain'?'<video class="media-blur" src="'+esc(u)+'" autoplay muted loop playsinline></video>':'')+'<video class="full-media fit-'+fmv+'" src="'+esc(u)+'" autoplay muted loop playsinline></video></div>';}
     else if(s.type==='youtube'){html='<iframe class="full-frame" src="'+esc(youtube(u))+'" allow="autoplay; fullscreen"></iframe>';}
-    else if(s.type==='webpage'||s.type==='external-link'||s.type==='dashboard'){html='<iframe class="full-frame" src="'+esc(u)+'"></iframe>';}
+    else if(s.type==='webpage'||s.type==='external-link'||s.type==='dashboard'){html='<iframe class="full-frame" src="'+esc(prox(u,m))+'"></iframe>';}
+    else if(s.type==='rss'){html='<article class="rss-slide" data-rss-url="'+esc(u)+'"><h1>'+esc(s.title)+'</h1><p>Carregando RSS...</p></article>';}
     else{html='<article class="notice-slide"><h1>'+esc(s.title)+'</h1><p>'+esc(u)+'</p></article>';}
     el.innerHTML=html;
+    el.className=''; el.offsetHeight; el.className=trans(s);
+    loadRssBlocks();
     var ticker=document.getElementById('ticker'),txt=(m.tickerText||'');
     if(ticker&&txt){ticker.style.display='block';ticker.innerHTML='<span>'+esc(txt)+' &nbsp;&nbsp;&nbsp; '+esc(txt)+'</span>';}else if(ticker){ticker.style.display='none';}
   }
+  function loadRssBlocks(){var blocks=document.querySelectorAll?document.querySelectorAll('[data-rss-url]'):[];for(var i=0;i<blocks.length;i++){(function(b){var u=b.getAttribute('data-rss-url');if(!u)return;try{var r=new XMLHttpRequest();r.open('POST','/api/rss/preview',true);r.setRequestHeader('Content-Type','application/json');r.onreadystatechange=function(){if(r.readyState===4&&r.status>=200&&r.status<300){try{var data=JSON.parse(r.responseText),items=data.items||[],h='<h1>G1 | RSS</h1>';for(var j=0;j<items.length&&j<5;j++){h+='<h3>'+esc(items[j].title)+'</h3><p>'+esc(items[j].description||'')+'</p>';}b.innerHTML=h;}catch(e){}}};r.send(JSON.stringify({url:u}));}catch(e){}})(blocks[i]);}}
   function tickClock(){var d=new Date(),p=function(n){return n<10?'0'+n:n;},c=document.getElementById('clock');if(c)c.innerHTML=esc(code)+' | '+p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());}
   function next(){if(!slides.length)return;render(slides[index%slides.length]);var s=slides[index%slides.length];index=(index+1)%slides.length;clearTimeout(timer);timer=setTimeout(next,Math.max(1,s.duration||10)*1000);}
   function refresh(){xhr('/api/player/'+encodeURIComponent(code),function(p){payload=p;slides=build(p);if(index>=slides.length)index=0;if(!timer)next();});}
