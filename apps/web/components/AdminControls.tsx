@@ -63,6 +63,7 @@ export function AdminControls({
     setContentProgress('Preparando conteudo...');
     try {
       const file = form.get('file');
+      let inferredType = String(form.get('type'));
       if (file instanceof File && file.size > 0) {
         const isPresentation = /\.(ppt|pptm|pptx|pdf)$/i.test(file.name);
         setContentProgress(isPresentation ? 'Enviando arquivo e convertendo slides. Isso pode demorar...' : 'Enviando arquivo...');
@@ -77,6 +78,9 @@ export function AdminControls({
         } else {
           setContentProgress('Upload concluido. Salvando na biblioteca...');
         }
+        if (uploaded.mimeType?.startsWith('video/') || /\.(mp4|webm|mov)$/i.test(uploaded.url)) inferredType = 'video';
+        if (uploaded.mimeType?.startsWith('image/') || /\.(png|jpe?g|gif|webp|svg)$/i.test(uploaded.url)) inferredType = 'image';
+        if (uploaded.mimeType === 'application/pdf' || /\.pdf$/i.test(uploaded.url)) inferredType = 'pdf';
       }
       const fullscreen = form.get('fullscreen') === 'on';
       const selectedFitMode: 'cover' | 'contain' = form.get('fitMode') === 'cover' ? 'cover' : 'contain';
@@ -84,7 +88,7 @@ export function AdminControls({
       const perSlideSeconds = Math.max(1, Number(form.get('perSlideSeconds')) || 5);
       const payload: Partial<ContentAsset> = {
         name: String(form.get('name')),
-        type: String(form.get('type')),
+        type: inferredType,
         url,
         durationSeconds: Math.max(Number(form.get('durationSeconds')) || 15, uploadedSlides.length * perSlideSeconds || 1),
         metadata: {

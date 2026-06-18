@@ -1,6 +1,6 @@
 'use client';
 
-import { CSSProperties, useEffect, useMemo, useState } from 'react';
+import { CSSProperties, useEffect, useMemo, useRef, useState } from 'react';
 import { io } from 'socket.io-client';
 import { api } from '../lib/api';
 import { EmergencyMessage, PlayerPayload } from '../lib/types';
@@ -29,7 +29,7 @@ export function PlayerScreen({
     const contentSlides = payload.assets.map((asset) => ({
       id: asset.id,
       title: asset.name,
-      type: asset.type,
+      type: effectiveAssetType(asset.type, asset.url),
       body: asset.url,
       tickerText: '',
       tickerPersistent: false,
@@ -138,20 +138,31 @@ export function PlayerScreen({
     return () => window.removeEventListener('click', enterFullscreen);
   }, []);
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      document.querySelectorAll('video').forEach((video) => {
+        video.muted = true;
+        video.playsInline = true;
+        video.play().catch(() => undefined);
+      });
+    }, 120);
+    return () => window.clearTimeout(timer);
+  }, [timerSlideId, emergency.active, index]);
+
   if (emergency.active) {
     return (
       <main className="player-safe-area grid place-items-center bg-red-700 text-white">
         <section className="px-8 text-center">
-          <h1 className="text-7xl font-black tracking-wide">{emergency.title}</h1>
+          <h1 className="text-[clamp(2rem,7vw,5rem)] font-black tracking-wide">{emergency.title}</h1>
           {emergency.bodyHtml ? (
             <div
-              className="notice-body mx-auto mt-8 max-w-6xl text-4xl font-extrabold leading-normal"
+              className="notice-body mx-auto mt-8 max-w-6xl text-[clamp(1.35rem,3.4vw,2.5rem)] font-extrabold leading-normal"
               dangerouslySetInnerHTML={{ __html: normalizeHtmlMedia(emergency.bodyHtml) }}
             />
           ) : (
             <div className="mt-8 space-y-4">
               {emergency.lines.map((line) => (
-                <p key={line} className="text-4xl font-extrabold">
+                <p key={line} className="text-[clamp(1.35rem,3.4vw,2.5rem)] font-extrabold">
                   {line}
                 </p>
               ))}
@@ -277,11 +288,11 @@ export function PlayerScreen({
                 <p className="text-sm font-semibold uppercase tracking-[0.35em]" style={{ color: branding?.primaryColor ?? '#bfdbfe' }}>
                   {active.type}
                 </p>
-                <h1 className="mt-6 text-6xl font-black leading-tight">{active.title}</h1>
+                <h1 className="mt-[clamp(0.75rem,2vw,1.5rem)] text-[clamp(2rem,5.5vw,4.5rem)] font-black leading-tight">{active.title}</h1>
                 {active.type === 'notice' ? (
                 <>
                   <div
-                    className="notice-body mx-auto mt-8 max-w-5xl text-3xl leading-normal text-blue-50"
+                    className="notice-body mx-auto mt-[clamp(0.75rem,2vw,2rem)] max-w-5xl text-[clamp(1.15rem,2.7vw,1.9rem)] leading-normal text-blue-50"
                     dangerouslySetInnerHTML={{ __html: normalizeHtmlMedia(String(active.body)) }}
                   />
                 </>
@@ -301,15 +312,15 @@ export function PlayerScreen({
               ) : ['pptx', 'pptm', 'ppt', 'pdf', 'docx', 'xlsx'].includes(String(active.type)) ? (
                 <DocumentContent type={String(active.type)} url={String(active.body)} title={active.title} metadata={activeMetadata} />
               ) : active.type === 'image' ? (
-                <div className="mx-auto mt-8 h-[68vh] w-full max-w-5xl overflow-hidden rounded-lg shadow-soft">
+                <div className="mx-auto mt-[clamp(0.75rem,2vw,2rem)] h-[min(68svh,680px)] w-full max-w-5xl overflow-hidden rounded-lg shadow-soft">
                   <MediaFrame type="image" url={String(active.body)} title={active.title} fitMode="contain" />
                 </div>
               ) : active.type === 'video' ? (
-                <div className="mx-auto mt-8 h-[68vh] w-full max-w-5xl overflow-hidden rounded-lg shadow-soft">
+                <div className="mx-auto mt-[clamp(0.75rem,2vw,2rem)] h-[min(68svh,680px)] w-full max-w-5xl overflow-hidden rounded-lg shadow-soft">
                   <MediaFrame type="video" url={String(active.body)} title={active.title} fitMode="contain" loop />
                 </div>
               ) : (
-                <div className="mx-auto mt-8 grid h-80 max-w-4xl place-items-center rounded-lg border border-white/25 bg-white/10 p-8 text-3xl font-semibold shadow-soft backdrop-blur">
+                <div className="mx-auto mt-[clamp(0.75rem,2vw,2rem)] grid h-[min(42svh,20rem)] max-w-4xl place-items-center rounded-lg border border-white/25 bg-white/10 p-8 text-[clamp(1.1rem,2.6vw,1.875rem)] font-semibold shadow-soft backdrop-blur">
                   {String(active.body)}
                 </div>
               )}
@@ -318,7 +329,7 @@ export function PlayerScreen({
             </div>
           ) : (
             <section className="text-center">
-              <h1 className="text-5xl font-black">TV aguardando conteudo</h1>
+              <h1 className="text-[clamp(2rem,5vw,3rem)] font-black">TV aguardando conteudo</h1>
               <p className="mt-4 text-2xl text-blue-100">Codigo: {code}</p>
             </section>
           )}
@@ -361,6 +372,12 @@ function mediaUrl(url: string) {
   return url.replace(/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/media\//i, '/media/');
 }
 
+function effectiveAssetType(type: string, url: string) {
+  if (/\.(mp4|webm|mov)(\?|#|$)/i.test(url)) return 'video';
+  if (/\.(png|jpe?g|gif|webp|svg)(\?|#|$)/i.test(url)) return 'image';
+  return type;
+}
+
 function normalizeHtmlMedia(html: string) {
   return html.replace(/https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/media\//gi, '/media/');
 }
@@ -368,7 +385,7 @@ function normalizeHtmlMedia(html: string) {
 function Ticker({ text }: { text: string }) {
   return (
     <div className="fixed bottom-0 left-0 right-0 z-20 overflow-hidden bg-red-600/95 py-3 text-white shadow-2xl">
-      <div className="ticker-track whitespace-nowrap text-3xl font-black uppercase tracking-wide">
+      <div className="ticker-track whitespace-nowrap text-[clamp(1.15rem,2.6vw,1.875rem)] font-black uppercase tracking-wide">
         <span className="px-12">{text}</span>
         <span className="px-12">{text}</span>
       </div>
@@ -666,7 +683,7 @@ function EmbeddedContent({
   }
 
   return (
-    <div className={`h-full w-full overflow-hidden rounded-lg bg-black shadow-soft ${compact ? '' : 'mx-auto mt-8 max-h-[72vh] max-w-6xl'}`}>
+    <div className={`h-full w-full overflow-hidden rounded-lg bg-black shadow-soft ${compact ? '' : 'mx-auto mt-8 max-h-[72svh] max-w-6xl'}`}>
       <iframe
         src={embedUrl}
         title={title}
@@ -713,7 +730,7 @@ function FullscreenMedia({
     <iframe
       src={embedUrl}
       title={title}
-      className="h-screen w-screen border-0 bg-black"
+      className="h-full w-full border-0 bg-black"
       allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen"
       allowFullScreen
     />
@@ -755,7 +772,7 @@ function DocumentContent({
       <iframe
         src={`${mediaUrl(url)}#toolbar=0&navpanes=0&scrollbar=0`}
         title={title}
-        className={`${fullscreen ? 'h-screen w-screen' : 'h-[70vh] w-full'} border-0 bg-white`}
+        className={`${fullscreen ? 'h-full w-full' : 'h-[70svh] w-full'} border-0 bg-white`}
       />
     );
   }
@@ -766,16 +783,16 @@ function DocumentContent({
       <iframe
         src={officeUrl}
         title={title}
-        className={`${fullscreen ? 'h-screen w-screen' : 'h-[70vh] w-full'} border-0 bg-white`}
+        className={`${fullscreen ? 'h-full w-full' : 'h-[70svh] w-full'} border-0 bg-white`}
         allowFullScreen
       />
     );
   }
 
   return (
-    <div className={`${fullscreen ? 'h-screen w-screen' : 'mx-auto mt-8 min-h-[360px] max-w-5xl'} grid place-items-center bg-white p-10 text-center text-slate-950`}>
+    <div className={`${fullscreen ? 'h-full w-full' : 'mx-auto mt-8 min-h-[min(360px,70svh)] max-w-5xl'} grid place-items-center bg-white p-10 text-center text-slate-950`}>
       <div>
-        <p className="text-3xl font-black">{title}</p>
+        <p className="text-[clamp(1.35rem,3vw,1.875rem)] font-black">{title}</p>
         <p className="mt-4 text-xl">Este arquivo foi salvo, mas ainda nao tem slides convertidos para exibir automaticamente.</p>
         {conversionError ? <p className="mt-3 text-base text-red-700">{friendlyConversionError(String(conversionError))}</p> : null}
         <p className="mt-3 text-base text-slate-700">Tente reenviar o arquivo ou salvar no PowerPoint como PPTX/PDF antes de enviar.</p>
@@ -812,7 +829,7 @@ function DocumentSlideShow({
   }, [perSlideSeconds, slides.length]);
 
   return (
-    <div key={`${slides[slideIndex]}-${slideIndex}`} className={fullscreen ? 'h-screen w-screen' : 'h-full w-full'} style={transitionAnimationStyle(transition, 'in')}>
+    <div key={`${slides[slideIndex]}-${slideIndex}`} className="h-full w-full" style={transitionAnimationStyle(transition, 'in')}>
       <MediaFrame
         type="image"
         url={slides[slideIndex]}
@@ -901,8 +918,17 @@ function MediaFrame({
   loop?: boolean;
   fullscreen?: boolean;
 }) {
+  const videoRef = useRef<HTMLVideoElement>(null);
   const mediaClass = fitMode === 'cover' ? 'object-cover' : 'object-contain';
-  const sizeClass = fullscreen ? 'h-screen w-screen' : 'h-full w-full';
+  const sizeClass = fullscreen ? 'h-full w-full' : 'h-full w-full';
+
+  useEffect(() => {
+    if (type !== 'video' || !videoRef.current) return;
+    const video = videoRef.current;
+    video.muted = true;
+    video.playsInline = true;
+    video.play().catch(() => undefined);
+  }, [type, url]);
 
   return (
     <div className={`relative overflow-hidden bg-black ${sizeClass}`}>
@@ -930,12 +956,14 @@ function MediaFrame({
         <img src={mediaUrl(url)} alt={title} className={`relative z-[1] h-full w-full ${mediaClass}`} />
       ) : (
         <video
+          ref={videoRef}
           src={mediaUrl(url)}
           className={`relative z-[1] h-full w-full ${mediaClass}`}
           autoPlay
           muted
           loop={loop}
           playsInline
+          preload="auto"
         />
       )}
     </div>
@@ -1008,7 +1036,7 @@ function RssContent({ url, compact = false }: { url: string; compact?: boolean }
   }
 
   return (
-    <div className={`w-full overflow-hidden text-left ${compact ? 'h-full p-2' : 'mx-auto max-h-[58vh] max-w-5xl rounded-lg bg-white/95 p-8 text-slate-950'}`}>
+    <div className={`w-full overflow-hidden text-left ${compact ? 'h-full p-2' : 'mx-auto max-h-[58svh] max-w-5xl rounded-lg bg-white/95 p-[clamp(1rem,2vw,2rem)] text-slate-950'}`}>
       <div className={`${compact ? 'mb-2 text-sm' : 'mb-5 text-2xl'} font-black text-red-700`}>
         G1 | Ultimas noticias
       </div>

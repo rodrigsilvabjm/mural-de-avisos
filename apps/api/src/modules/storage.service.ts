@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { execFile } from 'child_process';
-import { mkdtemp, readdir, rm, writeFile } from 'fs/promises';
+import { mkdtemp, readFile, readdir, rm, writeFile } from 'fs/promises';
 import { Client } from 'minio';
 import { extname, join } from 'path';
 import { promisify } from 'util';
@@ -25,13 +25,14 @@ export class StorageService {
 
     await this.ensureBucket();
 
-    const objectName = `${Date.now()}-${file.originalname}`;
-    const contentType = contentTypeFor(file);
+    const prepared = await this.prepareUploadFile(file);
+    const objectName = `${Date.now()}-${prepared.originalname}`;
+    const contentType = prepared.contentType;
     await this.client.putObject(
       this.bucket,
       objectName,
-      file.buffer,
-      file.size,
+      prepared.buffer,
+      prepared.buffer.length,
       { 'Content-Type': contentType },
     );
 
@@ -45,9 +46,64 @@ export class StorageService {
       objectName,
       url: `${process.env.PUBLIC_MEDIA_URL ?? '/media'}/${objectName}`,
       mimeType: contentType,
-      size: file.size,
+      size: prepared.buffer.length,
       ...convertedSlides,
     };
+  }
+
+  private async prepareUploadFile(file: Express.Multer.File) {
+    const extension = extname(file.originalname).toLowerCase();
+    if (extension !== '.mov') {
+      return {
+        originalname: file.originalname,
+        buffer: file.buffer,
+        contentType: contentTypeFor(file),
+      };
+    }
+
+    const tempDir = await mkdtemp('/tmp/signage-video-');
+    try {
+      const inputPath = join(tempDir, 'source.mov');
+      const outputPath = join(tempDir, 'source.mp4');
+      await writeFile(inputPath, file.buffer);
+      await execFileAsync(
+        'ffmpeg',
+        [
+          '-y',
+          '-i',
+          inputPath,
+          '-map',
+          '0:v:0',
+          '-map',
+          '0:a?',
+          '-c:v',
+          'libx264',
+          '-preset',
+          'veryfast',
+          '-pix_fmt',
+          'yuv420p',
+          '-c:a',
+          'aac',
+          '-movflags',
+          '+faststart',
+          outputPath,
+        ],
+        { timeout: 900000 },
+      );
+      return {
+        originalname: file.originalname.replace(/\.mov$/i, '.mp4'),
+        buffer: await readFile(outputPath),
+        contentType: 'video/mp4',
+      };
+    } catch {
+      return {
+        originalname: file.originalname,
+        buffer: file.buffer,
+        contentType: contentTypeFor(file),
+      };
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
   }
 
   private async convertPresentationToSlides(file: Express.Multer.File, objectName: string) {
