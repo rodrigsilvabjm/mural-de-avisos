@@ -222,12 +222,13 @@ export class SignageController {
     @Query('authMode') authMode: string | undefined,
     @Query('username') username: string | undefined,
     @Query('password') password: string | undefined,
+    @Query('proxyVersion') proxyVersion: string | undefined,
     @Res() response: Response,
   ) {
     const target = safeHttpUrl(rawUrl);
 
-    if (authMode === 'grafana-image') {
-      response.redirect(302, grafanaImagePageUrl(target, { authMode, username, password }));
+    if (authMode === 'grafana-image' || (authMode === 'grafana' && proxyVersion === 'lite-1')) {
+      response.redirect(302, grafanaImagePageUrl(target, { authMode: 'grafana-image', username, password }));
       return;
     }
 

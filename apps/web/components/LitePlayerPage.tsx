@@ -245,7 +245,8 @@ function toYoutubeEmbed(rawUrl: string) {
 }
 
 function embeddableUrl(rawUrl: string, metadata: Record<string, unknown>) {
-  const authMode = String(metadata.authMode ?? '');
+  let authMode = String(metadata.authMode ?? '');
+  if (authMode === 'grafana') authMode = 'grafana-image';
   if (!authMode || authMode === 'none') return rawUrl;
   const params = [
     `url=${encodeURIComponent(rawUrl)}`,
@@ -305,7 +306,7 @@ function liteScript() {
   function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
   function media(u){return String(u||'').replace(/^https?:\\/\\/(localhost|127\\.0\\.0\\.1)(:\\d+)?\\/media\\//i,'/media/');}
   function enc(v){return encodeURIComponent(String(v==null?'':v));}
-  function prox(u,m){m=m||{};var a=m.authMode||'';if(!a||a==='none')return u;var q='url='+enc(u)+'&authMode='+enc(a)+'&proxyVersion=lite-1';if(m.authUsername)q+='&username='+enc(m.authUsername);if(m.authPassword)q+='&password='+enc(m.authPassword);return '/api/proxy/frame?'+q;}
+  function prox(u,m){m=m||{};var a=m.authMode||'';if(a==='grafana')a='grafana-image';if(!a||a==='none')return u;var q='url='+enc(u)+'&authMode='+enc(a)+'&proxyVersion=lite-1';if(m.authUsername)q+='&username='+enc(m.authUsername);if(m.authPassword)q+='&password='+enc(m.authPassword);return '/api/proxy/frame?'+q;}
   function fit(m){return (m&&m.fitMode==='contain')?'contain':'cover';}
   function trans(s){var t=(s&&s.transition)||(s&&s.metadata&&s.metadata.slideTransition)||'fade';return 'slide-in-'+String(t).replace(/[^a-z-]/g,'');}
   function cssValue(v){return String(v==null?'':v).replace(/[;"<>]/g,'');}
