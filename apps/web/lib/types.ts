@@ -56,7 +56,7 @@ export interface ContentAsset {
     slideTransition?: TransitionName;
     authUsername?: string;
     authPassword?: string;
-    authMode?: 'none' | 'proxy' | 'basic' | 'zabbix' | 'grafana';
+    authMode?: 'none' | 'proxy' | 'basic' | 'zabbix' | 'grafana' | 'grafana-image';
     conversionError?: string;
   };
 }

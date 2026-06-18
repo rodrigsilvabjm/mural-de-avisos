@@ -226,6 +226,11 @@ export class SignageController {
   ) {
     const target = safeHttpUrl(rawUrl);
 
+    if (authMode === 'grafana-image') {
+      response.redirect(302, grafanaImagePageUrl(target, { authMode, username, password }));
+      return;
+    }
+
     if (authMode === 'grafana') {
       response.redirect(302, grafanaUnifiedUrl(target, { authMode, username, password }));
       return;
@@ -310,6 +315,66 @@ export class SignageController {
     response.removeHeader('X-Frame-Options');
     response.removeHeader('Content-Security-Policy');
     const buffer = Buffer.from(await upstream.arrayBuffer());
+    response.send(buffer);
+  }
+
+  @Get('proxy/grafana-image')
+  async proxyGrafanaImagePage(
+    @Query('url') rawUrl: string,
+    @Query('authMode') authMode: string | undefined,
+    @Query('username') username: string | undefined,
+    @Query('password') password: string | undefined,
+    @Res() response: Response,
+  ) {
+    const target = safeHttpUrl(rawUrl);
+    response.setHeader('Content-Type', 'text/html; charset=utf-8');
+    response.setHeader('Cache-Control', 'no-store');
+    response.send(grafanaImagePageHtml(target, { authMode, username, password }));
+  }
+
+  @Get('proxy/grafana-image/render')
+  async proxyGrafanaImageRender(
+    @Query('url') rawUrl: string,
+    @Query('authMode') authMode: string | undefined,
+    @Query('username') username: string | undefined,
+    @Query('password') password: string | undefined,
+    @Res() response: Response,
+  ) {
+    const target = safeHttpUrl(rawUrl);
+    const renderTarget = grafanaRenderUrl(target);
+    const headers: Record<string, string> = {
+      'User-Agent': 'Mozilla/5.0 CorporateSignage/1.0',
+      Accept: 'image/png,image/*,*/*;q=0.8',
+    };
+
+    if ((authMode === 'grafana-image' || authMode === 'grafana') && username) {
+      const cookie = await grafanaSessionCookie(target, username, password ?? '');
+      if (cookie) headers.Cookie = cookie;
+    }
+
+    if (authMode === 'basic' && username) {
+      headers.Authorization = `Basic ${Buffer.from(`${username}:${password ?? ''}`).toString('base64')}`;
+    }
+
+    const upstream = await fetch(renderTarget.toString(), {
+      headers,
+      redirect: 'follow',
+    });
+    const contentType = upstream.headers.get('content-type') ?? 'application/octet-stream';
+    const buffer = Buffer.from(await upstream.arrayBuffer());
+
+    response.status(upstream.status);
+    response.setHeader('Cache-Control', 'no-store');
+    response.removeHeader('X-Frame-Options');
+    response.removeHeader('Content-Security-Policy');
+
+    if (!contentType.includes('image/')) {
+      response.setHeader('Content-Type', 'image/svg+xml; charset=utf-8');
+      response.send(grafanaErrorSvg(renderTarget, contentType, buffer.toString('utf8').slice(0, 600)));
+      return;
+    }
+
+    response.setHeader('Content-Type', contentType);
     response.send(buffer);
   }
 
@@ -434,6 +499,19 @@ function cleanXml(value: string) {
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
     .trim();
+}
+
+function escapeHtml(value: string) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function escapeJs(value: string) {
+  return String(value).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\r?\n/g, '');
 }
 
 function safeHttpUrl(rawUrl?: string) {
@@ -585,6 +663,102 @@ function proxyResourceUrl(
   if (auth.username) params.set('username', auth.username);
   if (auth.password) params.set('password', auth.password);
   return `/api/proxy/resource?${params.toString()}`;
+}
+
+function grafanaImagePageUrl(
+  target: URL,
+  auth: { authMode?: string; username?: string; password?: string },
+) {
+  const params = new URLSearchParams({
+    url: target.toString(),
+    authMode: auth.authMode ?? 'grafana-image',
+  });
+  if (auth.username) params.set('username', auth.username);
+  if (auth.password) params.set('password', auth.password);
+  return `/api/proxy/grafana-image?${params.toString()}`;
+}
+
+function grafanaImageRenderUrl(
+  target: URL,
+  auth: { authMode?: string; username?: string; password?: string },
+) {
+  const params = new URLSearchParams({
+    url: target.toString(),
+    authMode: auth.authMode ?? 'grafana-image',
+  });
+  if (auth.username) params.set('username', auth.username);
+  if (auth.password) params.set('password', auth.password);
+  return `/api/proxy/grafana-image/render?${params.toString()}`;
+}
+
+function grafanaImagePageHtml(
+  target: URL,
+  auth: { authMode?: string; username?: string; password?: string },
+) {
+  const imageUrl = grafanaImageRenderUrl(target, auth);
+  return `<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="refresh" content="60">
+  <style>
+    html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#050816;color:#fff;font-family:Arial,Helvetica,sans-serif}
+    #wrap{position:fixed;left:0;top:0;width:100%;height:100%;display:-webkit-box;display:-ms-flexbox;display:flex;-webkit-box-align:center;-ms-flex-align:center;align-items:center;-webkit-box-pack:center;-ms-flex-pack:center;justify-content:center;background:#050816}
+    img{width:100%;height:100%;object-fit:contain;background:#050816;border:0}
+    #msg{display:none;position:fixed;left:4%;right:4%;bottom:6%;background:rgba(15,23,42,.92);border:1px solid rgba(255,255,255,.25);border-radius:14px;padding:20px;font-size:24px;line-height:1.35;text-align:center}
+  </style>
+</head>
+<body>
+  <div id="wrap"><img id="grafana" src="${escapeHtml(imageUrl)}" alt="Grafana"></div>
+  <div id="msg">Nao foi possivel renderizar a imagem do Grafana. Verifique se o Grafana Image Renderer esta instalado ou se esta URL possui /render habilitado.</div>
+  <script>
+    (function(){
+      var img=document.getElementById('grafana');
+      var msg=document.getElementById('msg');
+      function reload(){ img.src='${escapeJs(imageUrl)}&ts='+(new Date().getTime()); }
+      img.onerror=function(){ msg.style.display='block'; };
+      img.onload=function(){ msg.style.display='none'; };
+      setInterval(reload,60000);
+    })();
+  </script>
+</body>
+</html>`;
+}
+
+function grafanaRenderUrl(target: URL) {
+  const renderTarget = new URL(target.toString());
+  if (!renderTarget.pathname.startsWith('/render/')) {
+    if (renderTarget.pathname.startsWith('/d/') || renderTarget.pathname.startsWith('/d-solo/')) {
+      renderTarget.pathname = `/render${renderTarget.pathname}`;
+    } else {
+      renderTarget.pathname = `/render${renderTarget.pathname.startsWith('/') ? '' : '/'}${renderTarget.pathname}`;
+    }
+  }
+  if (!renderTarget.searchParams.has('orgId')) renderTarget.searchParams.set('orgId', '1');
+  if (!renderTarget.searchParams.has('from')) renderTarget.searchParams.set('from', 'now-6h');
+  if (!renderTarget.searchParams.has('to')) renderTarget.searchParams.set('to', 'now');
+  if (!renderTarget.searchParams.has('width')) renderTarget.searchParams.set('width', '1920');
+  if (!renderTarget.searchParams.has('height')) renderTarget.searchParams.set('height', '1080');
+  renderTarget.searchParams.set('kiosk', 'tv');
+  return renderTarget;
+}
+
+function grafanaErrorSvg(target: URL, contentType: string, body: string) {
+  const message = [
+    'Grafana nao retornou uma imagem.',
+    'Use uma URL /render do Grafana ou instale/habilite o Grafana Image Renderer.',
+    `URL: ${target.toString()}`,
+    `Content-Type: ${contentType}`,
+    body.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim(),
+  ].join('\\n');
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+<rect width="1920" height="1080" fill="#050816"/>
+<rect x="170" y="250" width="1580" height="580" rx="34" fill="#111827" stroke="#ef4444" stroke-width="4"/>
+<text x="240" y="350" fill="#f87171" font-family="Arial, Helvetica, sans-serif" font-size="46" font-weight="700">Erro ao renderizar Grafana</text>
+<foreignObject x="240" y="410" width="1440" height="330">
+  <div xmlns="http://www.w3.org/1999/xhtml" style="color:#fff;font:30px Arial,Helvetica,sans-serif;line-height:1.4;white-space:pre-wrap">${escapeHtml(message)}</div>
+</foreignObject>
+</svg>`;
 }
 
 function grafanaResourceUrl(

@@ -338,6 +338,7 @@ export function AdminControls({
                 <option value="basic">HTTP Basic Auth</option>
                 <option value="zabbix">Zabbix login por formulario</option>
                 <option value="grafana">Grafana login por formulario</option>
+                <option value="grafana-image">Grafana imagem para TV LG</option>
               </select>
             </label>
             <div className="grid grid-cols-2 gap-3">
@@ -345,7 +346,7 @@ export function AdminControls({
               <Input name="authPassword" label="Senha" type="password" defaultValue={editingAsset?.metadata?.authPassword ?? ''} autoComplete="new-password" />
             </div>
             <p className="rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
-              Para Zabbix comum, use Zabbix login por formulario. Para Grafana, use Grafana login por formulario ou Proxy sem login quando o painel for publico.
+              Para Zabbix comum, use Zabbix login por formulario. Para Grafana em TV LG, use Grafana imagem para TV LG.
             </p>
             <label className="flex items-center gap-2 text-sm">
               <input name="fullscreen" type="checkbox" defaultChecked={editingAsset?.metadata?.fullscreen ?? true} />
@@ -656,7 +657,7 @@ function Select({ label, options, ...props }: React.SelectHTMLAttributes<HTMLSel
 }
 
 function authModeValue(value: FormDataEntryValue | null): NonNullable<ContentAsset['metadata']>['authMode'] {
-  return value === 'proxy' || value === 'basic' || value === 'zabbix' || value === 'grafana' ? value : 'none';
+  return value === 'proxy' || value === 'basic' || value === 'zabbix' || value === 'grafana' || value === 'grafana-image' ? value : 'none';
 }
 
 function DataPanel({ title, children }: { title: string; children: React.ReactNode }) {

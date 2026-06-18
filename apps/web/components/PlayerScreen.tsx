@@ -831,7 +831,7 @@ function fullscreenFitMode(fitMode?: 'cover' | 'contain') {
 function toEmbeddableUrl(url: string, authMode?: string, username?: string, password?: string) {
   if (!url) return '';
   if (isYouTubeUrl(url)) return toYouTubeEmbed(url);
-  if (authMode === 'proxy' || authMode === 'basic' || authMode === 'zabbix' || authMode === 'grafana') {
+  if (authMode === 'proxy' || authMode === 'basic' || authMode === 'zabbix' || authMode === 'grafana' || authMode === 'grafana-image') {
     return proxiedFrameUrl(url, authMode, username, password);
   }
   return url;
