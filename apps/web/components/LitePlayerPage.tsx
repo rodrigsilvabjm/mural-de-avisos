@@ -343,7 +343,8 @@ function liteScript() {
       var tm=d.fitMode==='cover'?'cover':'contain';
       var full=d.fullBleed&&(it.kind==='image'||it.kind==='video'||it.kind==='iframe');
       var pos=full?'left:0;top:0;width:100%;height:100%;':'left:'+left+'%;top:'+top+'%;width:'+w+'%;height:'+h+'%;';
-      html+='<div class="template-item" data-start="'+startOf(d)+'" data-end="'+endOf(d,total)+'" data-enter="'+esc(d.transition||'none')+'" data-exit="'+esc(d.exitTransition||d.transition||'none')+'" style="'+pos+'z-index:'+(it.zIndex||1)+';'+itemCss(it,d)+'">';
+      var itemStart=it.kind==='video'?0:startOf(d),itemEnd=it.kind==='video'?total:endOf(d,total);
+      html+='<div class="template-item" data-start="'+itemStart+'" data-end="'+itemEnd+'" data-enter="'+esc(d.transition||'none')+'" data-exit="'+esc(d.exitTransition||d.transition||'none')+'" style="'+pos+'z-index:'+(it.zIndex||1)+';'+itemCss(it,d)+'">';
       if(it.kind==='image'&&url){html+='<img class="template-media fit-'+tm+'" src="'+esc(url)+'">';}
       else if(it.kind==='video'&&url){html+='<video class="template-media fit-'+tm+'" src="'+esc(url)+'" autoplay muted loop playsinline></video>';}
       else if(it.kind==='iframe'&&url){html+='<iframe class="template-media" src="'+esc(prox(url,d))+'"></iframe>';}

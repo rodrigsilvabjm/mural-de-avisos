@@ -482,11 +482,11 @@ function TemplatePlacedItem({
   const fullBleed = data.fullBleed === true;
   const transition = typeof data.transition === 'string' ? data.transition : 'none';
   const exitTransition = typeof data.exitTransition === 'string' ? data.exitTransition : transition;
-  const rawStart = data.startSecond === undefined || data.startSecond === '' ? 1 : Number(data.startSecond);
+  const rawStart = item.kind === 'video' ? 0 : data.startSecond === undefined || data.startSecond === '' ? 1 : Number(data.startSecond);
   const startSecond = Math.max(0, Number.isFinite(rawStart) ? rawStart : 1);
   const durationSecond = Math.max(0, Number(data.durationSecond ?? 0) || 0);
   const explicitEnd = Math.max(0, Number(data.endSecond ?? 0) || 0);
-  const endSecond = durationSecond > 0 ? startSecond + durationSecond : explicitEnd > 0 ? explicitEnd : slideDuration;
+  const endSecond = item.kind === 'video' ? slideDuration : durationSecond > 0 ? startSecond + durationSecond : explicitEnd > 0 ? explicitEnd : slideDuration;
   const width = Math.max(1, Math.min(item.width, TEMPLATE_WIDTH));
   const height = Math.max(1, Math.min(item.height, TEMPLATE_HEIGHT));
   const x = Math.max(0, Math.min(item.x, TEMPLATE_WIDTH - width));
