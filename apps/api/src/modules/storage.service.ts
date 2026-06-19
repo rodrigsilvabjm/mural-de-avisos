@@ -53,14 +53,52 @@ export class StorageService {
   }
 
   async compatibleVideoUrl(rawUrl: string) {
+    const compatibleObjectName = await this.ensureCompatibleVideo(rawUrl);
+    return `${process.env.PUBLIC_MEDIA_URL ?? '/media'}/${compatibleObjectName}`;
+  }
+
+  async compatibleVideoStream(rawUrl: string, range?: string) {
+    const objectName = await this.ensureCompatibleVideo(rawUrl);
+    const stat = await this.client.statObject(this.bucket, objectName);
+    const size = Number(stat.size ?? 0);
+    const headers: Record<string, string | number> = {
+      'Content-Type': 'video/mp4',
+      'Accept-Ranges': 'bytes',
+      'Cache-Control': 'public, max-age=31536000, immutable',
+    };
+
+    const parsed = parseRange(range, size);
+    if (parsed) {
+      const { start, end } = parsed;
+      const length = end - start + 1;
+      return {
+        status: 206,
+        headers: {
+          ...headers,
+          'Content-Range': `bytes ${start}-${end}/${size}`,
+          'Content-Length': length,
+        },
+        stream: await this.client.getPartialObject(this.bucket, objectName, start, length),
+      };
+    }
+
+    return {
+      status: 200,
+      headers: {
+        ...headers,
+        'Content-Length': size,
+      },
+      stream: await this.client.getObject(this.bucket, objectName),
+    };
+  }
+
+  private async ensureCompatibleVideo(rawUrl: string) {
     const objectName = objectNameFromMediaUrl(rawUrl);
     const compatibleObjectName = objectName.replace(/\.[^.]+$/, '') + '-compat.mp4';
     await this.ensureBucket();
 
     const exists = await this.client.statObject(this.bucket, compatibleObjectName).then(() => true).catch(() => false);
-    if (exists) {
-      return `${process.env.PUBLIC_MEDIA_URL ?? '/media'}/${compatibleObjectName}`;
-    }
+    if (exists) return compatibleObjectName;
 
     const stream = await this.client.getObject(this.bucket, objectName);
     const inputBuffer = await streamToBuffer(stream);
@@ -104,7 +142,7 @@ export class StorageService {
       await this.client.fPutObject(this.bucket, compatibleObjectName, outputPath, {
         'Content-Type': 'video/mp4',
       });
-      return `${process.env.PUBLIC_MEDIA_URL ?? '/media'}/${compatibleObjectName}`;
+      return compatibleObjectName;
     } finally {
       await rm(tempDir, { recursive: true, force: true });
     }
@@ -274,6 +312,26 @@ async function streamToBuffer(stream: Readable) {
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
   }
   return Buffer.concat(chunks);
+}
+
+function parseRange(range: string | undefined, size: number) {
+  if (!range || size <= 0) return null;
+  const match = /^bytes=(\d*)-(\d*)$/i.exec(range.trim());
+  if (!match) return null;
+
+  let start = match[1] ? Number(match[1]) : 0;
+  let end = match[2] ? Number(match[2]) : size - 1;
+
+  if (!match[1] && match[2]) {
+    const suffixLength = Number(match[2]);
+    start = Math.max(0, size - suffixLength);
+    end = size - 1;
+  }
+
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end < start) return null;
+  if (start >= size) return null;
+  end = Math.min(end, size - 1);
+  return { start, end };
 }
 
 function conversionErrorMessage(error: unknown) {

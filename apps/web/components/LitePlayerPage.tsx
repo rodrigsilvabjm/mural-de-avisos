@@ -165,8 +165,9 @@ function renderAssetSlide(slide: LiteSlide) {
     const videoUrl = compatibleVideoUrl(url);
     return (
       <div className={`media-stage fit-${fitMode}`}>
-        {fitMode === 'contain' ? <video className="media-blur" src={videoUrl} autoPlay muted loop playsInline /> : null}
-        <video className={`full-media fit-${fitMode}`} src={videoUrl} autoPlay muted loop playsInline />
+        <video className={`full-media fit-${fitMode}`} autoPlay muted loop playsInline preload="auto">
+          <source src={videoUrl} type="video/mp4" />
+        </video>
       </div>
     );
   }
@@ -199,7 +200,13 @@ function renderTemplateItem(item: {
   const content = String(data.content ?? data.label ?? '');
   const fitMode = data.fitMode === 'cover' ? 'cover' : 'contain';
   if (item.kind === 'image' && sourceUrl) return <img className={`template-media fit-${fitMode}`} src={sourceUrl} alt={content} />;
-  if (item.kind === 'video' && sourceUrl) return <video className={`template-media fit-${fitMode}`} src={compatibleVideoUrl(sourceUrl)} autoPlay muted loop playsInline />;
+  if (item.kind === 'video' && sourceUrl) {
+    return (
+      <video className={`template-media fit-${fitMode}`} autoPlay muted loop playsInline preload="auto">
+        <source src={compatibleVideoUrl(sourceUrl)} type="video/mp4" />
+      </video>
+    );
+  }
   if (item.kind === 'iframe' && sourceUrl) return <iframe className="template-media" src={embeddableUrl(sourceUrl, data)} title={content || sourceUrl} />;
   if (item.kind === 'rss') {
     return <div className="template-rss" data-rss-url={sourceUrl || content}>Carregando RSS...</div>;
@@ -349,7 +356,7 @@ function liteScript() {
       var pos=full?'left:0;top:0;width:100%;height:100%;':'left:'+left+'%;top:'+top+'%;width:'+w+'%;height:'+h+'%;';
       html+='<div class="template-item" data-start="'+startOf(d)+'" data-end="'+endOf(d,total)+'" data-enter="'+esc(d.transition||'none')+'" data-exit="'+esc(d.exitTransition||d.transition||'none')+'" style="'+pos+'z-index:'+(it.zIndex||1)+';'+itemCss(it,d)+'">';
       if(it.kind==='image'&&url){html+='<img class="template-media fit-'+tm+'" src="'+esc(url)+'">';}
-      else if(it.kind==='video'&&url){html+='<video class="template-media fit-'+tm+'" src="'+esc(videoUrl(url))+'" autoplay muted loop playsinline preload="auto"></video>';}
+      else if(it.kind==='video'&&url){html+='<video class="template-media fit-'+tm+'" autoplay muted loop playsinline preload="auto"><source src="'+esc(videoUrl(url))+'" type="video/mp4"></video>';}
       else if(it.kind==='iframe'&&url){html+='<iframe class="template-media" src="'+esc(prox(url,d))+'"></iframe>';}
       else if(it.kind==='rss'){html+='<div class="template-rss" data-rss-url="'+esc(url||content)+'">Carregando RSS...</div>';}
       else{html+='<div class="template-text">'+content+'</div>';}
@@ -367,7 +374,7 @@ function liteScript() {
     if(typ==='template'){html=renderTemplate(s.body||[],s.duration||10);}
     else if(s.type==='notice'){html='<article class="notice-slide"><h1>'+esc(s.title)+'</h1><div class="notice-body">'+String(s.body||'').replace(/https?:\\/\\/(localhost|127\\.0\\.0\\.1)(:\\d+)?\\/media\\//gi,'/media/')+'</div></article>';}
     else if(typ==='image'){var fm=fit(s);html='<div class="media-stage fit-'+fm+'">'+(fm==='contain'?'<img class="media-blur" src="'+esc(u)+'">':'')+'<img class="full-media fit-'+fm+'" src="'+esc(u)+'"></div>';}
-    else if(typ==='video'){var fmv=fit(s),vu=videoUrl(u);html='<div class="media-stage fit-'+fmv+'">'+(fmv==='contain'?'<video class="media-blur" src="'+esc(vu)+'" autoplay muted loop playsinline preload="auto"></video>':'')+'<video class="full-media fit-'+fmv+'" src="'+esc(vu)+'" autoplay muted loop playsinline preload="auto"></video><div class="video-error">Convertendo ou carregando video compativel com a TV...</div></div>';}
+    else if(typ==='video'){var fmv=fit(s),vu=videoUrl(u);html='<div class="media-stage fit-'+fmv+'"><video class="full-media fit-'+fmv+'" autoplay muted loop playsinline preload="auto"><source src="'+esc(vu)+'" type="video/mp4"></video><div class="video-error">Convertendo ou carregando video compativel com a TV...</div></div>';}
     else if(typ==='youtube'){html='<iframe class="full-frame" src="'+esc(youtube(u))+'" allow="autoplay; fullscreen"></iframe>';}
     else if(typ==='webpage'||typ==='external-link'||typ==='dashboard'){html='<iframe class="full-frame" src="'+esc(prox(u,m))+'"></iframe>';}
     else if(typ==='rss'){html='<article class="rss-slide" data-rss-url="'+esc(u)+'"><h1>'+esc(s.title)+'</h1><p>Carregando RSS...</p></article>';}

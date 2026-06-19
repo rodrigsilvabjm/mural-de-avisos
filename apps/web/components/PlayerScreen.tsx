@@ -947,14 +947,7 @@ function MediaFrame({
             className="absolute inset-0 h-full w-full scale-110 object-cover opacity-70 blur-2xl"
           />
         ) : (
-          <video
-            src={src}
-            className="absolute inset-0 h-full w-full scale-110 object-cover opacity-70 blur-2xl"
-            autoPlay
-            muted
-            loop
-            playsInline
-          />
+          null
         )
       ) : null}
       {fitMode === 'contain' ? <div className="absolute inset-0 bg-black/20" /> : null}
@@ -962,15 +955,17 @@ function MediaFrame({
         <img src={src} alt={title} className={`relative z-[1] h-full w-full ${mediaClass}`} />
       ) : (
         <video
+          key={src}
           ref={videoRef}
-          src={src}
           className={`relative z-[1] h-full w-full ${mediaClass}`}
           autoPlay
           muted
           loop={loop}
           playsInline
           preload="auto"
-        />
+        >
+          <source src={src} type="video/mp4" />
+        </video>
       )}
     </div>
   );

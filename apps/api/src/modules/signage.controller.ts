@@ -91,9 +91,17 @@ export class SignageController {
   }
 
   @Get('video/compat')
-  async compatibleVideo(@Query('url') rawUrl: string, @Res() response: Response) {
-    const url = await this.storage.compatibleVideoUrl(rawUrl);
-    response.redirect(302, url);
+  async compatibleVideo(
+    @Query('url') rawUrl: string,
+    @Headers('range') range: string | undefined,
+    @Res() response: Response,
+  ) {
+    const video = await this.storage.compatibleVideoStream(rawUrl, range);
+    response.status(video.status);
+    for (const [key, value] of Object.entries(video.headers)) {
+      response.setHeader(key, value);
+    }
+    video.stream.pipe(response);
   }
 
   @Get('notices')
