@@ -34,7 +34,7 @@ export function PlayerScreen({
       tickerText: '',
       tickerPersistent: false,
       displayMode: 'dark',
-      duration: effectiveAssetType(asset.type, asset.url) === 'video' ? Math.max(15, asset.durationSeconds || 15) : asset.durationSeconds,
+      duration: effectiveAssetType(asset.type, asset.url) === 'video' ? Math.max(60, asset.durationSeconds || 15) : asset.durationSeconds,
       metadata: asset.metadata ?? {},
     }));
     const noticeSlides = payload.notices
@@ -57,7 +57,7 @@ export function PlayerScreen({
       body: template.items,
       tickerText: '',
       tickerPersistent: false,
-      duration: template.durationSeconds ?? 25,
+      duration: hasFullBleedMedia(template.items) || template.items.some((item) => item.kind === 'video') ? Math.max(60, template.durationSeconds ?? 25) : template.durationSeconds ?? 25,
       displayMode: template.displayMode ?? 'dark',
       metadata: {},
     }));
@@ -941,14 +941,7 @@ function MediaFrame({
             className="absolute inset-0 h-full w-full scale-110 object-cover opacity-70 blur-2xl"
           />
         ) : (
-          <video
-            src={mediaUrl(url)}
-            className="absolute inset-0 h-full w-full scale-110 object-cover opacity-70 blur-2xl"
-            autoPlay
-            muted
-            loop
-            playsInline
-          />
+          null
         )
       ) : null}
       {fitMode === 'contain' ? <div className="absolute inset-0 bg-black/20" /> : null}

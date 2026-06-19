@@ -60,7 +60,7 @@ function buildLiteSlides(payload: PlayerPayload): LiteSlide[] {
     title: template.name,
     type: 'template',
     body: template.items,
-    duration: template.durationSeconds ?? 25,
+    duration: templateHasVideo(template.items) ? Math.max(60, template.durationSeconds ?? 25) : template.durationSeconds ?? 25,
     displayMode: template.displayMode ?? 'dark',
   }));
   const noticeSlides = payload.notices
@@ -97,7 +97,7 @@ function buildLiteSlides(payload: PlayerPayload): LiteSlide[] {
       title: asset.name,
       type: effectiveAssetType(asset.type, asset.url),
       body: asset.url,
-      duration: asset.durationSeconds || 15,
+      duration: effectiveAssetType(asset.type, asset.url) === 'video' ? Math.max(60, asset.durationSeconds || 15) : asset.durationSeconds || 15,
       metadata,
       transition: String(metadata.slideTransition ?? 'fade'),
       fitMode: String(metadata.fitMode ?? 'cover'),
@@ -110,6 +110,10 @@ function isActive(startsAt?: string, endsAt?: string, now = Date.now()) {
   const starts = startsAt ? new Date(startsAt).getTime() : 0;
   const ends = endsAt ? new Date(endsAt).getTime() : Number.POSITIVE_INFINITY;
   return (Number.isNaN(starts) || starts <= now) && (Number.isNaN(ends) || ends >= now);
+}
+
+function templateHasVideo(items: Array<{ kind: string }> = []) {
+  return items.some((item) => item.kind === 'video');
 }
 
 function renderStaticSlide(slide: LiteSlide) {
@@ -164,7 +168,6 @@ function renderAssetSlide(slide: LiteSlide) {
   if (type === 'video') {
     return (
       <div className={`media-stage fit-${fitMode}`}>
-        {fitMode === 'contain' ? <video className="media-blur" src={url} autoPlay muted loop playsInline /> : null}
         <video className={`full-media fit-${fitMode}`} src={url} autoPlay muted loop playsInline />
       </div>
     );
@@ -329,9 +332,9 @@ function liteScript() {
   function activeNotice(n){var now=Date.now();var st=n.startsAt?new Date(n.startsAt).getTime():0;var en=n.endsAt?new Date(n.endsAt).getTime():Infinity;return (isNaN(st)||st<=now)&&(isNaN(en)||en>=now);}
   function build(p){
     var out=[],i,a,n,t;
-    for(i=0;i<(p.templates||[]).length;i++){t=p.templates[i];out.push({id:t.id,title:t.name,type:'template',body:t.items||[],duration:t.durationSeconds||25,displayMode:t.displayMode||'dark'});}
+    for(i=0;i<(p.templates||[]).length;i++){t=p.templates[i];var tv=hasVideo(t.items||[]);out.push({id:t.id,title:t.name,type:'template',body:t.items||[],duration:tv?Math.max(60,t.durationSeconds||25):(t.durationSeconds||25),displayMode:t.displayMode||'dark'});}
     for(i=0;i<(p.notices||[]).length;i++){n=p.notices[i];if(activeNotice(n)){out.push({id:n.id,title:n.title,type:'notice',body:n.bodyHtml||'',duration:n.durationSeconds||15,metadata:{tickerText:n.tickerText||'',tickerPersistent:!!n.tickerPersistent}});}}
-    for(i=0;i<(p.assets||[]).length;i++){a=p.assets[i];var m=a.metadata||{},arr=m.slides||[];if(arr.length){for(var j=0;j<arr.length;j++){out.push({id:a.id+'-'+j,title:a.name+' '+(j+1),type:'image',body:arr[j],duration:m.perSlideSeconds||5,metadata:m,transition:m.slideTransition||'fade',fitMode:m.fitMode||'contain'});}}else{var mt=mediaType(a.type,a.url);out.push({id:a.id,title:a.name,type:mt,body:a.url,duration:mt==='video'?Math.max(15,a.durationSeconds||15):(a.durationSeconds||15),metadata:m,transition:m.slideTransition||'fade',fitMode:m.fitMode||'cover'});}}
+    for(i=0;i<(p.assets||[]).length;i++){a=p.assets[i];var m=a.metadata||{},arr=m.slides||[];if(arr.length){for(var j=0;j<arr.length;j++){out.push({id:a.id+'-'+j,title:a.name+' '+(j+1),type:'image',body:arr[j],duration:m.perSlideSeconds||5,metadata:m,transition:m.slideTransition||'fade',fitMode:m.fitMode||'contain'});}}else{var mt=mediaType(a.type,a.url);out.push({id:a.id,title:a.name,type:mt,body:a.url,duration:mt==='video'?Math.max(60,a.durationSeconds||15):(a.durationSeconds||15),metadata:m,transition:m.slideTransition||'fade',fitMode:m.fitMode||'cover'});}}
     return out;
   }
   function renderTemplate(items,total){
@@ -360,7 +363,7 @@ function liteScript() {
     if(typ==='template'){html=renderTemplate(s.body||[],s.duration||10);}
     else if(s.type==='notice'){html='<article class="notice-slide"><h1>'+esc(s.title)+'</h1><div class="notice-body">'+String(s.body||'').replace(/https?:\\/\\/(localhost|127\\.0\\.0\\.1)(:\\d+)?\\/media\\//gi,'/media/')+'</div></article>';}
     else if(typ==='image'){var fm=fit(s);html='<div class="media-stage fit-'+fm+'">'+(fm==='contain'?'<img class="media-blur" src="'+esc(u)+'">':'')+'<img class="full-media fit-'+fm+'" src="'+esc(u)+'"></div>';}
-    else if(typ==='video'){var fmv=fit(s);html='<div class="media-stage fit-'+fmv+'">'+(fmv==='contain'?'<video class="media-blur" src="'+esc(u)+'" autoplay muted loop playsinline preload="auto"></video>':'')+'<video class="full-media fit-'+fmv+'" src="'+esc(u)+'" autoplay muted loop playsinline preload="auto"></video><div class="video-error">Nao foi possivel reproduzir este video nesta TV. Reenvie em MP4/H.264.</div></div>';}
+    else if(typ==='video'){var fmv=fit(s);html='<div class="media-stage fit-'+fmv+'"><video class="full-media fit-'+fmv+'" src="'+esc(u)+'" autoplay muted loop playsinline preload="auto"></video><div class="video-error">Nao foi possivel reproduzir este video nesta TV. Reenvie em MP4/H.264.</div></div>';}
     else if(typ==='youtube'){html='<iframe class="full-frame" src="'+esc(youtube(u))+'" allow="autoplay; fullscreen"></iframe>';}
     else if(typ==='webpage'||typ==='external-link'||typ==='dashboard'){html='<iframe class="full-frame" src="'+esc(prox(u,m))+'"></iframe>';}
     else if(typ==='rss'){html='<article class="rss-slide" data-rss-url="'+esc(u)+'"><h1>'+esc(s.title)+'</h1><p>Carregando RSS...</p></article>';}
@@ -374,6 +377,7 @@ function liteScript() {
     if(ticker&&txt){ticker.style.display='block';ticker.innerHTML='<span>'+esc(txt)+' &nbsp;&nbsp;&nbsp; '+esc(txt)+'</span>';}else if(ticker){ticker.style.display='none';}
   }
   function mediaType(t,u){u=String(u||'');if(/\\.(mp4|webm|mov)(\\?|#|$)/i.test(u))return 'video';if(/\\.(png|jpe?g|gif|webp|svg)(\\?|#|$)/i.test(u))return 'image';return t;}
+  function hasVideo(items){for(var i=0;i<(items||[]).length;i++){if(items[i]&&items[i].kind==='video')return true;}return false;}
   function playVideos(){var videos=document.getElementsByTagName('video');for(var i=0;i<videos.length;i++){(function(v){try{v.muted=true;v.playsInline=true;v.setAttribute('playsinline','');v.setAttribute('webkit-playsinline','');v.onerror=function(){var e=document.querySelector&&document.querySelector('.video-error');if(e)e.style.display='block';};var tries=0;function go(){tries++;try{var p=v.play&&v.play();if(p&&p.catch)p.catch(function(){if(tries<8)setTimeout(go,700);});if(v.paused&&tries<8)setTimeout(go,700);}catch(e){if(tries<8)setTimeout(go,700);}}go();}catch(e){}})(videos[i]);}}
   var widgetTimer=null,slideStarted=0;
   function startWidgetTimeline(total){clearInterval(widgetTimer);slideStarted=Date.now();updateWidgets(total);widgetTimer=setInterval(function(){updateWidgets(total);},200);}
