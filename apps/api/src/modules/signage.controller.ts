@@ -17,7 +17,11 @@ import {
   UseInterceptors,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { execFile } from 'child_process';
 import type { Request, Response } from 'express';
+import { mkdtemp, readFile, rm } from 'fs/promises';
+import { join } from 'path';
+import { promisify } from 'util';
 import {
   ApproveScreenDto,
   CreateContentDto,
@@ -33,6 +37,8 @@ import {
 import { SignageGateway } from './signage.gateway';
 import { SignageService } from './signage.service';
 import { StorageService } from './storage.service';
+
+const execFileAsync = promisify(execFile);
 
 @Controller()
 export class SignageController {
@@ -339,6 +345,7 @@ export class SignageController {
     @Query('authMode') authMode: string | undefined,
     @Query('username') username: string | undefined,
     @Query('password') password: string | undefined,
+    @Req() request: Request,
     @Res() response: Response,
   ) {
     const target = safeHttpUrl(rawUrl);
@@ -370,8 +377,21 @@ export class SignageController {
     response.removeHeader('Content-Security-Policy');
 
     if (!contentType.includes('image/')) {
+      const html = buffer.toString('utf8').slice(0, 1000);
+      const rendererMissing = /No image renderer available|image renderer.*install/i.test(html);
+      if (rendererMissing) {
+        const screenshot = await grafanaBrowserScreenshot(target, { authMode: 'grafana', username, password }).catch(
+          () => undefined,
+        );
+        if (screenshot) {
+          response.status(200);
+          response.setHeader('Content-Type', 'image/png');
+          response.send(screenshot);
+          return;
+        }
+      }
       response.setHeader('Content-Type', 'image/svg+xml; charset=utf-8');
-      response.send(grafanaErrorSvg(renderTarget, contentType, buffer.toString('utf8').slice(0, 600)));
+      response.send(grafanaErrorSvg(renderTarget, contentType, html));
       return;
     }
 
@@ -742,6 +762,44 @@ function grafanaRenderUrl(target: URL) {
   if (!renderTarget.searchParams.has('height')) renderTarget.searchParams.set('height', '1080');
   renderTarget.searchParams.set('kiosk', 'tv');
   return renderTarget;
+}
+
+async function grafanaBrowserScreenshot(
+  target: URL,
+  auth: { authMode?: string; username?: string; password?: string },
+) {
+  const tempDir = await mkdtemp('/tmp/signage-grafana-');
+  try {
+    const outputPath = join(tempDir, 'grafana.png');
+    const localBase = `http://127.0.0.1:${process.env.PORT ?? 4000}`;
+    const proxiedPath = grafanaUnifiedUrl(target, auth);
+    const screenshotUrl = `${localBase}${proxiedPath}`;
+    const chromium = process.env.CHROMIUM_BIN || '/usr/bin/chromium-browser';
+    await execFileAsync(
+      chromium,
+      [
+        '--headless=new',
+        '--no-sandbox',
+        '--disable-gpu',
+        '--disable-dev-shm-usage',
+        '--hide-scrollbars',
+        '--window-size=1920,1080',
+        '--virtual-time-budget=12000',
+        `--screenshot=${outputPath}`,
+        screenshotUrl,
+      ],
+      {
+        timeout: 45000,
+        env: {
+          ...process.env,
+          NO_PROXY: `${process.env.NO_PROXY ? `${process.env.NO_PROXY},` : ''}127.0.0.1,localhost`,
+        },
+      },
+    );
+    return await readFile(outputPath);
+  } finally {
+    await rm(tempDir, { recursive: true, force: true });
+  }
 }
 
 function grafanaErrorSvg(target: URL, contentType: string, body: string) {

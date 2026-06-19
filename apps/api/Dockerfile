@@ -13,7 +13,7 @@ RUN npm run build -w apps/api
 FROM node:20-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
-RUN apk add --no-cache ffmpeg libreoffice poppler-utils font-noto ttf-dejavu
+RUN apk add --no-cache chromium ffmpeg libreoffice poppler-utils font-noto ttf-dejavu
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=build /app/apps/api/dist ./apps/api/dist
 COPY apps/api/package.json apps/api/package.json

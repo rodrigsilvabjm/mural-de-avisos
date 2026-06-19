@@ -34,7 +34,7 @@ export function PlayerScreen({
       tickerText: '',
       tickerPersistent: false,
       displayMode: 'dark',
-      duration: asset.durationSeconds,
+      duration: effectiveAssetType(asset.type, asset.url) === 'video' ? Math.max(15, asset.durationSeconds || 15) : asset.durationSeconds,
       metadata: asset.metadata ?? {},
     }));
     const noticeSlides = payload.notices

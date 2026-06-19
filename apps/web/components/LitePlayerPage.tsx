@@ -284,6 +284,7 @@ html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#050816;col
 .notice-body{font-size:30px;line-height:1.35;max-width:1100px;max-height:100%;overflow:hidden}
 .notice-body img,.notice-body video{max-width:100%;max-height:62vh;object-fit:contain;border-radius:16px}
 .media-stage{position:absolute;left:0;top:0;width:100%;height:100%;overflow:hidden;background:#000}
+.video-error{display:none;position:absolute;left:8%;right:8%;bottom:8%;z-index:4;background:rgba(15,23,42,.88);border:1px solid rgba(255,255,255,.25);border-radius:12px;padding:16px;color:#fff;font-size:22px;text-align:center}
 .media-blur{position:absolute;left:0;top:0;width:100%;height:100%;object-fit:cover;filter:blur(26px);transform:scale(1.08);opacity:.72}
 .full-media,.full-frame{position:absolute;left:0;top:0;width:100%;height:100%;border:0;background:#000}
 .fit-cover{object-fit:cover}.fit-contain{object-fit:contain}
@@ -330,7 +331,7 @@ function liteScript() {
     var out=[],i,a,n,t;
     for(i=0;i<(p.templates||[]).length;i++){t=p.templates[i];out.push({id:t.id,title:t.name,type:'template',body:t.items||[],duration:t.durationSeconds||25,displayMode:t.displayMode||'dark'});}
     for(i=0;i<(p.notices||[]).length;i++){n=p.notices[i];if(activeNotice(n)){out.push({id:n.id,title:n.title,type:'notice',body:n.bodyHtml||'',duration:n.durationSeconds||15,metadata:{tickerText:n.tickerText||'',tickerPersistent:!!n.tickerPersistent}});}}
-    for(i=0;i<(p.assets||[]).length;i++){a=p.assets[i];var m=a.metadata||{},arr=m.slides||[];if(arr.length){for(var j=0;j<arr.length;j++){out.push({id:a.id+'-'+j,title:a.name+' '+(j+1),type:'image',body:arr[j],duration:m.perSlideSeconds||5,metadata:m,transition:m.slideTransition||'fade',fitMode:m.fitMode||'contain'});}}else{out.push({id:a.id,title:a.name,type:mediaType(a.type,a.url),body:a.url,duration:a.durationSeconds||15,metadata:m,transition:m.slideTransition||'fade',fitMode:m.fitMode||'cover'});}}
+    for(i=0;i<(p.assets||[]).length;i++){a=p.assets[i];var m=a.metadata||{},arr=m.slides||[];if(arr.length){for(var j=0;j<arr.length;j++){out.push({id:a.id+'-'+j,title:a.name+' '+(j+1),type:'image',body:arr[j],duration:m.perSlideSeconds||5,metadata:m,transition:m.slideTransition||'fade',fitMode:m.fitMode||'contain'});}}else{var mt=mediaType(a.type,a.url);out.push({id:a.id,title:a.name,type:mt,body:a.url,duration:mt==='video'?Math.max(15,a.durationSeconds||15):(a.durationSeconds||15),metadata:m,transition:m.slideTransition||'fade',fitMode:m.fitMode||'cover'});}}
     return out;
   }
   function renderTemplate(items,total){
@@ -359,7 +360,7 @@ function liteScript() {
     if(typ==='template'){html=renderTemplate(s.body||[],s.duration||10);}
     else if(s.type==='notice'){html='<article class="notice-slide"><h1>'+esc(s.title)+'</h1><div class="notice-body">'+String(s.body||'').replace(/https?:\\/\\/(localhost|127\\.0\\.0\\.1)(:\\d+)?\\/media\\//gi,'/media/')+'</div></article>';}
     else if(typ==='image'){var fm=fit(s);html='<div class="media-stage fit-'+fm+'">'+(fm==='contain'?'<img class="media-blur" src="'+esc(u)+'">':'')+'<img class="full-media fit-'+fm+'" src="'+esc(u)+'"></div>';}
-    else if(typ==='video'){var fmv=fit(s);html='<div class="media-stage fit-'+fmv+'">'+(fmv==='contain'?'<video class="media-blur" src="'+esc(u)+'" autoplay muted loop playsinline preload="auto"></video>':'')+'<video class="full-media fit-'+fmv+'" src="'+esc(u)+'" autoplay muted loop playsinline preload="auto"></video></div>';}
+    else if(typ==='video'){var fmv=fit(s);html='<div class="media-stage fit-'+fmv+'">'+(fmv==='contain'?'<video class="media-blur" src="'+esc(u)+'" autoplay muted loop playsinline preload="auto"></video>':'')+'<video class="full-media fit-'+fmv+'" src="'+esc(u)+'" autoplay muted loop playsinline preload="auto"></video><div class="video-error">Nao foi possivel reproduzir este video nesta TV. Reenvie em MP4/H.264.</div></div>';}
     else if(typ==='youtube'){html='<iframe class="full-frame" src="'+esc(youtube(u))+'" allow="autoplay; fullscreen"></iframe>';}
     else if(typ==='webpage'||typ==='external-link'||typ==='dashboard'){html='<iframe class="full-frame" src="'+esc(prox(u,m))+'"></iframe>';}
     else if(typ==='rss'){html='<article class="rss-slide" data-rss-url="'+esc(u)+'"><h1>'+esc(s.title)+'</h1><p>Carregando RSS...</p></article>';}
@@ -373,13 +374,13 @@ function liteScript() {
     if(ticker&&txt){ticker.style.display='block';ticker.innerHTML='<span>'+esc(txt)+' &nbsp;&nbsp;&nbsp; '+esc(txt)+'</span>';}else if(ticker){ticker.style.display='none';}
   }
   function mediaType(t,u){u=String(u||'');if(/\\.(mp4|webm|mov)(\\?|#|$)/i.test(u))return 'video';if(/\\.(png|jpe?g|gif|webp|svg)(\\?|#|$)/i.test(u))return 'image';return t;}
-  function playVideos(){var videos=document.getElementsByTagName('video');for(var i=0;i<videos.length;i++){try{videos[i].muted=true;videos[i].playsInline=true;var p=videos[i].play&&videos[i].play();if(p&&p.catch)p.catch(function(){});}catch(e){}}}
+  function playVideos(){var videos=document.getElementsByTagName('video');for(var i=0;i<videos.length;i++){(function(v){try{v.muted=true;v.playsInline=true;v.setAttribute('playsinline','');v.setAttribute('webkit-playsinline','');v.onerror=function(){var e=document.querySelector&&document.querySelector('.video-error');if(e)e.style.display='block';};var tries=0;function go(){tries++;try{var p=v.play&&v.play();if(p&&p.catch)p.catch(function(){if(tries<8)setTimeout(go,700);});if(v.paused&&tries<8)setTimeout(go,700);}catch(e){if(tries<8)setTimeout(go,700);}}go();}catch(e){}})(videos[i]);}}
   var widgetTimer=null,slideStarted=0;
   function startWidgetTimeline(total){clearInterval(widgetTimer);slideStarted=Date.now();updateWidgets(total);widgetTimer=setInterval(function(){updateWidgets(total);},200);}
   function updateWidgets(total){var nodes=document.querySelectorAll?document.querySelectorAll('.template-item[data-start]'):[];var elapsed=(Date.now()-slideStarted)/1000;for(var i=0;i<nodes.length;i++){var n=nodes[i],st=parseFloat(n.getAttribute('data-start')||'0'),en=parseFloat(n.getAttribute('data-end')||String(total||9999));var was=n.getAttribute('data-visible')==='1';var visible=elapsed>=st&&elapsed<=en;if(visible){n.style.display='flex';if(!was){var ent=n.getAttribute('data-enter')||'fade';n.style.animation=(ent&&ent!=='none')?animName(ent)+' .7s ease forwards':'';n.setAttribute('data-visible','1');}if(en<total&&elapsed>en-.7){var ex=n.getAttribute('data-exit')||'fade';if(ex&&ex!=='none')n.style.animation=animName(ex).replace('In','Out')+' .7s ease forwards';}}else{n.style.display='none';n.setAttribute('data-visible','0');}}}
   function loadRssBlocks(){var blocks=document.querySelectorAll?document.querySelectorAll('[data-rss-url]'):[];for(var i=0;i<blocks.length;i++){(function(b){var u=b.getAttribute('data-rss-url');if(!u)return;try{var r=new XMLHttpRequest();r.open('POST','/api/rss/preview',true);r.setRequestHeader('Content-Type','application/json');r.onreadystatechange=function(){if(r.readyState===4&&r.status>=200&&r.status<300){try{var data=JSON.parse(r.responseText),items=data.items||[],h='<h1>G1 | Ultimas noticias</h1>';for(var j=0;j<items.length&&j<4;j++){h+='<h3>'+esc(items[j].title)+'</h3>';}b.innerHTML=h;}catch(e){}}};r.send(JSON.stringify({url:u}));}catch(e){}})(blocks[i]);}}
   function tickClock(){var d=new Date(),p=function(n){return n<10?'0'+n:n;},c=document.getElementById('clock');if(c)c.innerHTML=esc(code)+' | '+p(d.getHours())+':'+p(d.getMinutes())+':'+p(d.getSeconds());}
-  function next(){if(!slides.length)return;render(slides[index%slides.length]);var s=slides[index%slides.length];index=(index+1)%slides.length;clearTimeout(timer);timer=setTimeout(next,Math.max(1,s.duration||10)*1000);}
+  function next(){if(!slides.length)return;render(slides[index%slides.length]);var s=slides[index%slides.length];index=(index+1)%slides.length;clearTimeout(timer);timer=setTimeout(next,Math.max(mediaType(s.type,s.body)==='video'?15:1,s.duration||10)*1000);}
   function refresh(){xhr('/api/player/'+encodeURIComponent(code),function(p){payload=p;slides=build(p);if(index>=slides.length)index=0;if(!timer)next();});}
   setInterval(tickClock,1000);tickClock();next();setInterval(refresh,5000);refresh();
 })();
