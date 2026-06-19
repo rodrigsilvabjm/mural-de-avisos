@@ -90,6 +90,12 @@ export class SignageController {
     return this.storage.upload(file);
   }
 
+  @Get('video/compat')
+  async compatibleVideo(@Query('url') rawUrl: string, @Res() response: Response) {
+    const url = await this.storage.compatibleVideoUrl(rawUrl);
+    response.redirect(302, url);
+  }
+
   @Get('notices')
   notices() {
     return this.signage.listNotices();
@@ -349,6 +355,17 @@ export class SignageController {
     @Res() response: Response,
   ) {
     const target = safeHttpUrl(rawUrl);
+    const screenshot = await grafanaBrowserScreenshot(target, { authMode: 'grafana', username, password }).catch(
+      () => undefined,
+    );
+    if (screenshot) {
+      response.status(200);
+      response.setHeader('Cache-Control', 'no-store');
+      response.setHeader('Content-Type', 'image/png');
+      response.send(screenshot);
+      return;
+    }
+
     const renderTarget = grafanaRenderUrl(target);
     const headers: Record<string, string> = {
       'User-Agent': 'Mozilla/5.0 CorporateSignage/1.0',
@@ -774,32 +791,48 @@ async function grafanaBrowserScreenshot(
     const localBase = `http://127.0.0.1:${process.env.PORT ?? 4000}`;
     const proxiedPath = grafanaUnifiedUrl(target, auth);
     const screenshotUrl = `${localBase}${proxiedPath}`;
-    const chromium = process.env.CHROMIUM_BIN || '/usr/bin/chromium-browser';
-    await execFileAsync(
-      chromium,
-      [
-        '--headless=new',
-        '--no-sandbox',
-        '--disable-gpu',
-        '--disable-dev-shm-usage',
-        '--hide-scrollbars',
-        '--window-size=1920,1080',
-        '--virtual-time-budget=12000',
-        `--screenshot=${outputPath}`,
-        screenshotUrl,
-      ],
-      {
-        timeout: 45000,
-        env: {
-          ...process.env,
-          NO_PROXY: `${process.env.NO_PROXY ? `${process.env.NO_PROXY},` : ''}127.0.0.1,localhost`,
-        },
-      },
-    );
+    await runChromiumScreenshot(outputPath, screenshotUrl);
     return await readFile(outputPath);
   } finally {
     await rm(tempDir, { recursive: true, force: true });
   }
+}
+
+async function runChromiumScreenshot(outputPath: string, screenshotUrl: string) {
+  const candidates = process.env.CHROMIUM_BIN
+    ? [process.env.CHROMIUM_BIN]
+    : ['/usr/bin/chromium-browser', '/usr/bin/chromium', 'chromium-browser', 'chromium'];
+  let lastError: unknown;
+  for (const chromium of candidates) {
+    try {
+      await execFileAsync(
+        chromium,
+        [
+          '--headless=new',
+          '--no-sandbox',
+          '--disable-gpu',
+          '--disable-dev-shm-usage',
+          '--disable-software-rasterizer',
+          '--hide-scrollbars',
+          '--window-size=1920,1080',
+          '--virtual-time-budget=20000',
+          `--screenshot=${outputPath}`,
+          screenshotUrl,
+        ],
+        {
+          timeout: 65000,
+          env: {
+            ...process.env,
+            NO_PROXY: `${process.env.NO_PROXY ? `${process.env.NO_PROXY},` : ''}127.0.0.1,localhost`,
+          },
+        },
+      );
+      return;
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError;
 }
 
 function grafanaErrorSvg(target: URL, contentType: string, body: string) {

@@ -2,7 +2,8 @@ import { Injectable } from '@nestjs/common';
 import { execFile } from 'child_process';
 import { mkdtemp, readFile, readdir, rm, writeFile } from 'fs/promises';
 import { Client } from 'minio';
-import { extname, join } from 'path';
+import { basename, extname, join } from 'path';
+import { Readable } from 'stream';
 import { promisify } from 'util';
 
 const execFileAsync = promisify(execFile);
@@ -49,6 +50,64 @@ export class StorageService {
       size: prepared.buffer.length,
       ...convertedSlides,
     };
+  }
+
+  async compatibleVideoUrl(rawUrl: string) {
+    const objectName = objectNameFromMediaUrl(rawUrl);
+    const compatibleObjectName = objectName.replace(/\.[^.]+$/, '') + '-compat.mp4';
+    await this.ensureBucket();
+
+    const exists = await this.client.statObject(this.bucket, compatibleObjectName).then(() => true).catch(() => false);
+    if (exists) {
+      return `${process.env.PUBLIC_MEDIA_URL ?? '/media'}/${compatibleObjectName}`;
+    }
+
+    const stream = await this.client.getObject(this.bucket, objectName);
+    const inputBuffer = await streamToBuffer(stream);
+    const tempDir = await mkdtemp('/tmp/signage-video-compat-');
+    try {
+      const inputPath = join(tempDir, basename(objectName));
+      const outputPath = join(tempDir, 'compatible.mp4');
+      await writeFile(inputPath, inputBuffer);
+      await execFileAsync(
+        'ffmpeg',
+        [
+          '-y',
+          '-i',
+          inputPath,
+          '-map',
+          '0:v:0',
+          '-map',
+          '0:a?',
+          '-c:v',
+          'libx264',
+          '-preset',
+          'veryfast',
+          '-profile:v',
+          'main',
+          '-level',
+          '4.0',
+          '-pix_fmt',
+          'yuv420p',
+          '-vf',
+          'scale=trunc(iw/2)*2:trunc(ih/2)*2',
+          '-c:a',
+          'aac',
+          '-b:a',
+          '128k',
+          '-movflags',
+          '+faststart',
+          outputPath,
+        ],
+        { timeout: 900000 },
+      );
+      await this.client.fPutObject(this.bucket, compatibleObjectName, outputPath, {
+        'Content-Type': 'video/mp4',
+      });
+      return `${process.env.PUBLIC_MEDIA_URL ?? '/media'}/${compatibleObjectName}`;
+    } finally {
+      await rm(tempDir, { recursive: true, force: true });
+    }
   }
 
   private async prepareUploadFile(file: Express.Multer.File) {
@@ -192,6 +251,29 @@ function contentTypeFor(file: Express.Multer.File) {
   if (name.endsWith('.pptx')) return 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
   if (name.endsWith('.ppt')) return 'application/vnd.ms-powerpoint';
   return file.mimetype || 'application/octet-stream';
+}
+
+function objectNameFromMediaUrl(rawUrl: string) {
+  const decoded = decodeURIComponent(rawUrl);
+  const mediaPrefix = '/media/';
+  const index = decoded.indexOf(mediaPrefix);
+  if (index >= 0) return decoded.slice(index + mediaPrefix.length).split(/[?#]/)[0];
+  try {
+    const url = new URL(decoded);
+    const pathIndex = url.pathname.indexOf(mediaPrefix);
+    if (pathIndex >= 0) return url.pathname.slice(pathIndex + mediaPrefix.length);
+  } catch {
+    // handled below
+  }
+  throw new Error('URL de video invalida para compatibilidade.');
+}
+
+async function streamToBuffer(stream: Readable) {
+  const chunks: Buffer[] = [];
+  for await (const chunk of stream) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks);
 }
 
 function conversionErrorMessage(error: unknown) {
