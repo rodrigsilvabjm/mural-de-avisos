@@ -372,11 +372,6 @@ function mediaUrl(url: string) {
   return url.replace(/^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/media\//i, '/media/');
 }
 
-function compatibleVideoUrl(url: string) {
-  const normalized = mediaUrl(url);
-  return `/api/video/compat?url=${encodeURIComponent(normalized)}`;
-}
-
 function effectiveAssetType(type: string, url: string) {
   if (/\.(mp4|webm|mov)(\?|#|$)/i.test(url)) return 'video';
   if (/\.(png|jpe?g|gif|webp|svg)(\?|#|$)/i.test(url)) return 'image';
@@ -926,7 +921,6 @@ function MediaFrame({
   const videoRef = useRef<HTMLVideoElement>(null);
   const mediaClass = fitMode === 'cover' ? 'object-cover' : 'object-contain';
   const sizeClass = fullscreen ? 'h-full w-full' : 'h-full w-full';
-  const src = type === 'video' ? compatibleVideoUrl(url) : mediaUrl(url);
 
   useEffect(() => {
     if (type !== 'video' || !videoRef.current) return;
@@ -934,38 +928,43 @@ function MediaFrame({
     video.muted = true;
     video.playsInline = true;
     video.play().catch(() => undefined);
-  }, [type, src]);
+  }, [type, url]);
 
   return (
     <div className={`relative overflow-hidden bg-black ${sizeClass}`}>
       {fitMode === 'contain' ? (
         type === 'image' ? (
           <img
-            src={src}
+            src={mediaUrl(url)}
             alt=""
             aria-hidden
             className="absolute inset-0 h-full w-full scale-110 object-cover opacity-70 blur-2xl"
           />
         ) : (
-          null
+          <video
+            src={mediaUrl(url)}
+            className="absolute inset-0 h-full w-full scale-110 object-cover opacity-70 blur-2xl"
+            autoPlay
+            muted
+            loop
+            playsInline
+          />
         )
       ) : null}
       {fitMode === 'contain' ? <div className="absolute inset-0 bg-black/20" /> : null}
       {type === 'image' ? (
-        <img src={src} alt={title} className={`relative z-[1] h-full w-full ${mediaClass}`} />
+        <img src={mediaUrl(url)} alt={title} className={`relative z-[1] h-full w-full ${mediaClass}`} />
       ) : (
         <video
-          key={src}
           ref={videoRef}
+          src={mediaUrl(url)}
           className={`relative z-[1] h-full w-full ${mediaClass}`}
           autoPlay
           muted
           loop={loop}
           playsInline
           preload="auto"
-        >
-          <source src={src} type="video/mp4" />
-        </video>
+        />
       )}
     </div>
   );
