@@ -711,7 +711,7 @@ function grafanaImagePageHtml(
 </head>
 <body>
   <div id="wrap"><img id="grafana" src="${escapeHtml(imageUrl)}" alt="Grafana"></div>
-  <div id="msg">Nao foi possivel renderizar a imagem do Grafana. Verifique se o Grafana Image Renderer esta instalado ou se esta URL possui /render habilitado.</div>
+  <div id="msg">O Grafana nao conseguiu gerar a imagem. Instale o plugin Grafana Image Renderer no servidor Grafana ou use uma URL de imagem ja renderizada.</div>
   <script>
     (function(){
       var img=document.getElementById('grafana');
@@ -745,13 +745,19 @@ function grafanaRenderUrl(target: URL) {
 }
 
 function grafanaErrorSvg(target: URL, contentType: string, body: string) {
+  const rendererMissing = /No image renderer available|image renderer.*install/i.test(body);
   const message = [
-    'Grafana nao retornou uma imagem.',
-    'Use uma URL /render do Grafana ou instale/habilite o Grafana Image Renderer.',
+    rendererMissing
+      ? 'O Grafana respondeu: Image Renderer nao instalado.'
+      : 'Grafana nao retornou uma imagem.',
+    rendererMissing
+      ? 'Instale o plugin grafana-image-renderer no servidor Grafana e reinicie o Grafana.'
+      : 'Use uma URL /render do Grafana ou instale/habilite o Grafana Image Renderer.',
+    rendererMissing ? 'Comando comum no servidor Grafana: grafana-cli plugins install grafana-image-renderer' : '',
     `URL: ${target.toString()}`,
     `Content-Type: ${contentType}`,
     body.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim(),
-  ].join('\\n');
+  ].filter(Boolean).join('\\n');
   return `<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
 <rect width="1920" height="1080" fill="#050816"/>
 <rect x="170" y="250" width="1580" height="580" rx="34" fill="#111827" stroke="#ef4444" stroke-width="4"/>
