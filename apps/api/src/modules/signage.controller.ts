@@ -90,20 +90,6 @@ export class SignageController {
     return this.storage.upload(file);
   }
 
-  @Get('video/compat')
-  async compatibleVideo(
-    @Query('url') rawUrl: string,
-    @Headers('range') range: string | undefined,
-    @Res() response: Response,
-  ) {
-    const video = await this.storage.compatibleVideoStream(rawUrl, range);
-    response.status(video.status);
-    for (const [key, value] of Object.entries(video.headers)) {
-      response.setHeader(key, value);
-    }
-    video.stream.pipe(response);
-  }
-
   @Get('notices')
   notices() {
     return this.signage.listNotices();

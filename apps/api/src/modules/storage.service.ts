@@ -2,8 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { execFile } from 'child_process';
 import { mkdtemp, readFile, readdir, rm, writeFile } from 'fs/promises';
 import { Client } from 'minio';
-import { basename, extname, join } from 'path';
-import { Readable } from 'stream';
+import { extname, join } from 'path';
 import { promisify } from 'util';
 
 const execFileAsync = promisify(execFile);
@@ -52,97 +51,9 @@ export class StorageService {
     };
   }
 
-  async compatibleVideoUrl(rawUrl: string) {
-    const compatibleObjectName = await this.ensureCompatibleVideo(rawUrl);
-    return `${process.env.PUBLIC_MEDIA_URL ?? '/media'}/${compatibleObjectName}`;
-  }
-
-  async compatibleVideoStream(rawUrl: string, range?: string) {
-    const objectName = await this.ensureCompatibleVideo(rawUrl);
-    const stat = await this.client.statObject(this.bucket, objectName);
-    const size = Number(stat.size ?? 0);
-    const headers: Record<string, string | number> = {
-      'Content-Type': 'video/mp4',
-      'Accept-Ranges': 'bytes',
-      'Cache-Control': 'public, max-age=31536000, immutable',
-    };
-
-    const parsed = parseRange(range, size);
-    if (parsed) {
-      const { start, end } = parsed;
-      const length = end - start + 1;
-      return {
-        status: 206,
-        headers: {
-          ...headers,
-          'Content-Range': `bytes ${start}-${end}/${size}`,
-          'Content-Length': length,
-        },
-        stream: await this.client.getPartialObject(this.bucket, objectName, start, length),
-      };
-    }
-
-    return {
-      status: 200,
-      headers: {
-        ...headers,
-        'Content-Length': size,
-      },
-      stream: await this.client.getObject(this.bucket, objectName),
-    };
-  }
-
-  private async ensureCompatibleVideo(rawUrl: string) {
-    const objectName = objectNameFromMediaUrl(rawUrl);
-    const compatibleObjectName = objectName.replace(/\.[^.]+$/, '') + '-tv.mp4';
-    await this.ensureBucket();
-
-    const exists = await this.client.statObject(this.bucket, compatibleObjectName).then(() => true).catch(() => false);
-    if (exists) return compatibleObjectName;
-
-    const stream = await this.client.getObject(this.bucket, objectName);
-    const inputBuffer = await streamToBuffer(stream);
-    const tempDir = await mkdtemp('/tmp/signage-video-compat-');
-    try {
-      const inputPath = join(tempDir, basename(objectName));
-      const outputPath = join(tempDir, 'compatible.mp4');
-      await writeFile(inputPath, inputBuffer);
-      await execFileAsync(
-        'ffmpeg',
-        [
-          '-y',
-          '-i',
-          inputPath,
-          '-map',
-          '0:v:0',
-          '-map',
-          '0:a?',
-          '-c:v',
-          'libx264',
-          '-preset',
-          'veryfast',
-          '-pix_fmt',
-          'yuv420p',
-          '-c:a',
-          'aac',
-          '-movflags',
-          '+faststart',
-          outputPath,
-        ],
-        { timeout: 900000 },
-      );
-      await this.client.fPutObject(this.bucket, compatibleObjectName, outputPath, {
-        'Content-Type': 'video/mp4',
-      });
-      return compatibleObjectName;
-    } finally {
-      await rm(tempDir, { recursive: true, force: true });
-    }
-  }
-
   private async prepareUploadFile(file: Express.Multer.File) {
     const extension = extname(file.originalname).toLowerCase();
-    if (extension !== '.mov') {
+    if (!isVideoUpload(file)) {
       return {
         originalname: file.originalname,
         buffer: file.buffer,
@@ -152,7 +63,7 @@ export class StorageService {
 
     const tempDir = await mkdtemp('/tmp/signage-video-');
     try {
-      const inputPath = join(tempDir, 'source.mov');
+      const inputPath = join(tempDir, `source${extension || '.video'}`);
       const outputPath = join(tempDir, 'source.mp4');
       await writeFile(inputPath, file.buffer);
       await execFileAsync(
@@ -204,7 +115,7 @@ export class StorageService {
         { timeout: 900000 },
       );
       return {
-        originalname: file.originalname.replace(/\.mov$/i, '.mp4'),
+        originalname: videoOutputName(file.originalname),
         buffer: await readFile(outputPath),
         contentType: 'video/mp4',
       };
@@ -299,6 +210,7 @@ export class StorageService {
 function contentTypeFor(file: Express.Multer.File) {
   const name = file.originalname.toLowerCase();
   if (name.endsWith('.mov')) return 'video/quicktime';
+  if (name.endsWith('.m4v')) return 'video/mp4';
   if (name.endsWith('.mp4')) return 'video/mp4';
   if (name.endsWith('.webm')) return 'video/webm';
   if (name.endsWith('.pptm')) return 'application/vnd.ms-powerpoint.presentation.macroEnabled.12';
@@ -307,47 +219,14 @@ function contentTypeFor(file: Express.Multer.File) {
   return file.mimetype || 'application/octet-stream';
 }
 
-function objectNameFromMediaUrl(rawUrl: string) {
-  const decoded = decodeURIComponent(rawUrl);
-  const mediaPrefix = '/media/';
-  const index = decoded.indexOf(mediaPrefix);
-  if (index >= 0) return decoded.slice(index + mediaPrefix.length).split(/[?#]/)[0];
-  try {
-    const url = new URL(decoded);
-    const pathIndex = url.pathname.indexOf(mediaPrefix);
-    if (pathIndex >= 0) return url.pathname.slice(pathIndex + mediaPrefix.length);
-  } catch {
-    // handled below
-  }
-  throw new Error('URL de video invalida para compatibilidade.');
+function isVideoUpload(file: Express.Multer.File) {
+  const extension = extname(file.originalname).toLowerCase();
+  return file.mimetype.startsWith('video/') || ['.mp4', '.mov', '.m4v', '.webm'].includes(extension);
 }
 
-async function streamToBuffer(stream: Readable) {
-  const chunks: Buffer[] = [];
-  for await (const chunk of stream) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
-  }
-  return Buffer.concat(chunks);
-}
-
-function parseRange(range: string | undefined, size: number) {
-  if (!range || size <= 0) return null;
-  const match = /^bytes=(\d*)-(\d*)$/i.exec(range.trim());
-  if (!match) return null;
-
-  let start = match[1] ? Number(match[1]) : 0;
-  let end = match[2] ? Number(match[2]) : size - 1;
-
-  if (!match[1] && match[2]) {
-    const suffixLength = Number(match[2]);
-    start = Math.max(0, size - suffixLength);
-    end = size - 1;
-  }
-
-  if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end < start) return null;
-  if (start >= size) return null;
-  end = Math.min(end, size - 1);
-  return { start, end };
+function videoOutputName(originalName: string) {
+  const baseName = originalName.replace(/\.[^.]+$/i, '') || 'video';
+  return `${baseName}-tv.mp4`;
 }
 
 function conversionErrorMessage(error: unknown) {
