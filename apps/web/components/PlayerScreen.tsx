@@ -923,15 +923,52 @@ function MediaFrame({
   fullscreen?: boolean;
 }) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const [videoFailed, setVideoFailed] = useState(false);
   const mediaClass = fitMode === 'cover' ? 'object-cover' : 'object-contain';
   const sizeClass = fullscreen ? 'h-full w-full' : 'h-full w-full';
 
   useEffect(() => {
     if (type !== 'video' || !videoRef.current) return;
     const video = videoRef.current;
+    setVideoFailed(false);
     video.muted = true;
     video.playsInline = true;
-    video.play().catch(() => undefined);
+    video.setAttribute('muted', '');
+    video.setAttribute('playsinline', '');
+    video.setAttribute('webkit-playsinline', '');
+
+    let tries = 0;
+    let cancelled = false;
+    const tryPlay = () => {
+      if (cancelled) return;
+      tries += 1;
+      try {
+        if (video.readyState === 0) video.load();
+        const result = video.play();
+        result?.catch?.(() => {
+          if (tries < 12) window.setTimeout(tryPlay, 700);
+          else setVideoFailed(true);
+        });
+        if (video.paused && tries < 12) window.setTimeout(tryPlay, 700);
+      } catch {
+        if (tries < 12) window.setTimeout(tryPlay, 700);
+        else setVideoFailed(true);
+      }
+    };
+    const failTimer = window.setTimeout(() => {
+      if ((video.paused || video.readyState < 2) && video.currentTime < 0.2) setVideoFailed(true);
+    }, 5000);
+
+    video.addEventListener('loadedmetadata', tryPlay);
+    video.addEventListener('canplay', tryPlay);
+    video.addEventListener('playing', () => setVideoFailed(false));
+    tryPlay();
+    return () => {
+      cancelled = true;
+      window.clearTimeout(failTimer);
+      video.removeEventListener('loadedmetadata', tryPlay);
+      video.removeEventListener('canplay', tryPlay);
+    };
   }, [type, url]);
 
   return (
@@ -961,8 +998,15 @@ function MediaFrame({
           loop={loop}
           playsInline
           preload="auto"
+          onError={() => setVideoFailed(true)}
+          onStalled={() => setVideoFailed(true)}
         />
       )}
+      {type === 'video' && videoFailed ? (
+        <div className="absolute inset-x-6 bottom-6 z-[2] rounded-2xl bg-red-600/90 p-4 text-center text-lg font-bold text-white shadow-2xl">
+          Nao foi possivel reproduzir este video nesta TV. Reenvie o video depois da atualizacao para converter no padrao LG.
+        </div>
+      ) : null}
     </div>
   );
 }
