@@ -188,6 +188,8 @@ export function PlayerScreen({
   const isFullscreenMedia =
     (Boolean(activeMetadata.fullscreen) || (['image', 'video'].includes(activeType) && Boolean(activeMetadata.hideChrome))) &&
     ['youtube', 'webpage', 'external-link', 'dashboard', 'image', 'video', 'pptx', 'pptm', 'ppt', 'pdf'].includes(activeType);
+  const activeHasVideo =
+    activeType === 'video' || (active?.type === 'template' && activeTemplateItems.some((item) => item.kind === 'video'));
   const shouldHideChrome = (isFullscreenMedia && activeMetadata.hideChrome) || isFullscreenTemplate;
   const branding = payload.branding;
   const logoClasses = {
@@ -263,7 +265,7 @@ export function PlayerScreen({
               className={
                 active.type === 'template' || isFullscreenMedia ? 'h-full w-full' : 'w-full max-w-5xl'
               }
-              style={isSlideExiting ? transitionStyle.exit : transitionStyle.enter}
+              style={activeHasVideo ? { animation: 'none', opacity: 1, transform: 'none' } : isSlideExiting ? transitionStyle.exit : transitionStyle.enter}
             >
               {isFullscreenMedia ? (
                 <FullscreenMedia
@@ -480,8 +482,8 @@ function TemplatePlacedItem({
 }) {
   const data = asRecord(item.data);
   const fullBleed = data.fullBleed === true;
-  const transition = typeof data.transition === 'string' ? data.transition : 'none';
-  const exitTransition = typeof data.exitTransition === 'string' ? data.exitTransition : transition;
+  const transition = item.kind === 'video' ? 'none' : typeof data.transition === 'string' ? data.transition : 'none';
+  const exitTransition = item.kind === 'video' ? 'none' : typeof data.exitTransition === 'string' ? data.exitTransition : transition;
   const rawStart = item.kind === 'video' ? 0 : data.startSecond === undefined || data.startSecond === '' ? 1 : Number(data.startSecond);
   const startSecond = Math.max(0, Number.isFinite(rawStart) ? rawStart : 1);
   const durationSecond = Math.max(0, Number(data.durationSecond ?? 0) || 0);
@@ -506,7 +508,9 @@ function TemplatePlacedItem({
         width: fullBleed ? '100%' : `${(width / TEMPLATE_WIDTH) * 100}%`,
         height: fullBleed ? '100%' : `${(height / TEMPLATE_HEIGHT) * 100}%`,
         zIndex: item.zIndex,
-        ...transitionAnimationStyle(isLeaving ? exitTransition : transition, isLeaving ? 'out' : 'in'),
+        ...(item.kind === 'video'
+          ? { animation: 'none', opacity: 1, transform: 'none' }
+          : transitionAnimationStyle(isLeaving ? exitTransition : transition, isLeaving ? 'out' : 'in')),
         ...modernWidgetStyle(item),
       }}
     >
